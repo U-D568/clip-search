@@ -1,0 +1,75 @@
+services:
+  mariadb:
+    image: mariadb
+    container_name: clip_mariadb
+    restart: unless-stopped
+    ports:
+      - ${MARIADB_PORT}:3306
+    volumes:
+      - "./storages/mariadb:/var/lib/mysql"
+    env_file:
+      - .env
+
+  redis:
+    image: redis
+    container_name: clip_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: clip_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - "./storages/qdrant:/qdrant/storage"
+
+  cpu_worker:
+    image: clip_search:dev
+    container_name: clip_cpu_worker
+    command: celery -A app.tasks.worker.celery_app worker -Q cpu_queue --concurrency=4 --loglevel=info
+    restart: unless-stopped
+    environment:
+      WORKER_TYPE: CPU
+      REDIS_URL: "redis://redis:6379/0"
+      MARIADB_URL: mariadb
+    volumes:
+      - ".:/app/:r"
+      - "shared_memory:/dev/shm"
+
+  gpu_worker:
+    image: clip_search:dev
+    container_name: clip_gpu_worker
+    command: celery -A app.tasks.worker.celery_app worker -Q embedding_queue --concurrency=1 --loglevel=info
+    restart: unless-stopped
+    environment:
+      WORKER_TYPE: GPU
+      REDIS_URL: "redis://redis:6379/0"
+      MARIADB_URL: mariadb
+      QDRANT_IP: qdrant
+    volumes:
+      - ".:/app/:r"
+      - "shared_memory:/dev/shm"
+      - "./${MODEL_CACHE_DIR}:/${MODEL_CACHE_DIR}"
+
+  fastapi:
+    image: clip_search:dev
+    command: uvicorn main:app --host 0.0.0.0  --port 8000
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ".:/app/:r"
+      - "./videos:/app/videos"
+
+volumes:
+  shared_memory:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=1g,mode=0777"
+    

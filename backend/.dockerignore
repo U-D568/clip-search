@@ -1,0 +1,9 @@
+.venv
+.vscode
+*alembic
+test
+storages
+videos
+
+Dockerfile*
+docker-compose.*

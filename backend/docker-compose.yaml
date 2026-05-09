@@ -1,0 +1,48 @@
+services:
+  mariadb:
+    image: mariadb
+    container_name: clip_mariadb
+    restart: unless-stopped
+    ports:
+      - ${MARIADB_PORT}:3306
+    volumes:
+      - "./storages/mariadb:/var/lib/mysql"
+    env_file:
+      - .env
+
+  redis:
+    image: redis
+    container_name: clip_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: clip_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - "./storages/qdrant:/qdrant/storage"
+
+  cpu_worker:
+    image: clip_search
+    container_name: clip_cpu_worker
+    command: celery -A app.tasks.worker.celery_app worker -Q cpu_queue --concurrency=4 --loglevel=info
+    environment:
+      WORKER_TYPE: CPU
+
+  gpu_worker:
+    image: clip_search
+    container_name: clip_gpu_worker
+    command: celery -A app.tasks.worker.celery_app worker -Q embedding_queue --concurrency=1 --loglevel=info
+    environment:
+      WORKER_TYPE: GPU
+
+  fastapi:
+    image: clip_search
+    command: uvicorn main:app --host 0.0.0.0  --port 8000
+    ports:
+      - "8000:8000"

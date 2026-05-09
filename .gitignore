@@ -3,19 +3,19 @@
 
 ### NextJS ###
 # dependencies
-/node_modules
-/.pnp
+node_modules
+.pnp
 .pnp.js
 
 # testing
-/coverage
+coverage
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build
 
 # misc
 .DS_Store
@@ -229,3 +229,14 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,nextjs,visualstudiocode
+
+
+### Custom Coniguration ###
+.venv
+.cache
+.vscode
+
+### Backend ###
+backend/videos
+backend/test
+backend/storages

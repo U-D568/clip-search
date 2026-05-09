@@ -1,0 +1,21 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+
+aiomysql
+alembic
+celery
+fastapi[standard]
+pymysql
+python-dotenv
+redis
+requests
+sqlalchemy
+transformers
+torch
+torchvision
+starlette_csrf
+qdrant-client
+opencv-python-headless
+python-jose
+bcrypt
+boto3
