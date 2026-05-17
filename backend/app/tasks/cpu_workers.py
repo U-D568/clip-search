@@ -18,14 +18,6 @@ from app.tasks.gpu_workers import frame_embedding
 from app.db.models import Frame
 
 
-@celery_app.task(queue="dummy")
-def dummy_queue_test(arg):
-    print("sleep now")
-    time.sleep(5)
-    print(arg)
-    print("Done")
-
-
 @celery_app.task(queue="cpu_queue")
 def frame_extractor(
     video_path: str, video_id: int, target_fps: float = 1.0, batch_size=32
