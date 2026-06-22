@@ -14,6 +14,7 @@ from app.exceptions import (
     DBWriteException,
     UserNotFoundException,
     ResourceNotFoundException,
+    DuplicatedVideoTitleException
 )
 from app.utils.jwt import get_current_username, get_user_uuid
 
@@ -23,6 +24,7 @@ video_router = APIRouter(prefix="/video", tags=["video"])
 @video_router.post("/upload")
 async def upload_video(
     file: UploadFile,
+    title: str,
     video_service: VideoService = Depends(get_video_service),
     user_service: UserService = Depends(get_user_service),
     username: str = Depends(get_current_username),
@@ -35,7 +37,9 @@ async def upload_video(
         raise HTTPException(401, detail=f"Unknown username: {username}")
 
     try:
-        await video_service.register_video(file, user)
+        await video_service.register_video(file, title, user)
+    except DuplicatedVideoTitleException:
+        raise HTTPException(409, detail=f"{title} is already exist.")
     except FileWriteException:
         raise HTTPException(500, detail=f"Failed to save a video {file.filename}")
     except DBWriteException:

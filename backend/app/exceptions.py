@@ -36,3 +36,6 @@ class CollectionNotFoundException(BaseException):
 
 class ResourceNotFoundException(BaseException):
     pass
+
+class DuplicatedVideoTitleException(BaseException):
+    pass
