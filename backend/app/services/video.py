@@ -4,66 +4,67 @@ from pathlib import Path
 import uuid
 
 from fastapi import UploadFile
-from starlette.concurrency import run_in_threadpool
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Video, User
 from app.db.repositories import AsyncVideoRepository
-from app.tasks.cpu_workers import frame_extractor, dummy_queue_test
+from app.tasks.cpu_workers import frame_extractor
 from app.utils.file import save_video_to_local
-from app.exceptions import FileWriteException, DBWriteException, ResourceNotFoundException
+from app.exceptions import (
+    FileWriteException,
+    DBWriteException,
+    ResourceNotFoundException,
+    DuplicatedVideoTitleException,
+)
+from app.s3.repositories import S3Repositories
 
 
 class VideoService:
-    def __init__(self, video_repo: AsyncVideoRepository):
-        self.repo = video_repo
+    def __init__(self, video_repo: AsyncVideoRepository, s3_repo: S3Repositories):
+        self.video_repo = video_repo
+        self.s3_repo = s3_repo
 
-    async def register_video(self, file: UploadFile, user: User):
-        # saves to local storage
-        dir_path = os.environ["LOCAL_VIDEO_STORAGE"]
+    async def register_video(self, file: UploadFile, title: str, user: User):
+        # save to s3 storage
         ext = Path(file.filename).suffix
-        new_filename = f"{uuid.uuid4()}{ext}"
-        save_path = Path(dir_path) / new_filename
-        title = Path(file.filename).stem
+        username = user.username
+        s3_key = f"{username}/{title}{ext}"
 
-        try:
-            await run_in_threadpool(save_video_to_local, file.file, save_path)
+        if False:
+            try:
+                # update data to database
+                new_video = Video(
+                    file_path=s3_key,
+                    title=title,
+                    uploaded_time=datetime.now(),
+                    owner=user.key,
+                )
+                self.video_repo.add(new_video)
 
-            # update data to database
-            new_video = Video(
-                file_path=save_path,
-                title=title,
-                uploaded_time=datetime.now(),
-                owner=user.key,
-            )
-            self.repo.add(new_video)
+                await self.video_repo.commit()
 
-            await self.repo.commit()
-        except FileWriteException:
-            if os.path.exists(save_path):
-                os.remove(save_path)
-            raise FileWriteException("Failed to write file")
-        except Exception as err:
-            await self.repo.rollback()
+                # upload to storage
+                self.s3_repo.upload(file.file, s3_key)
 
-            if os.path.exists(save_path):
-                os.remove(save_path)
+            except IntegrityError as err:
+                await self.video_repo.rollback()
+                raise DuplicatedVideoTitleException(f"{title} is already exist")
+            except Exception as err:
+                await self.video_repo.rollback()
+                raise Exception(err)
 
-            msg = f"Failed to insert to MariaDB. user_id: {user.key}"
-            raise DBWriteException(msg) from err
-
-        frame_extractor.delay(
-            str(save_path), new_video.key
-        )  # have to change run to delay
+        # test code
+        # frame_extractor.delay(str(s3_key), new_video.key)
+        frame_extractor.delay(str(s3_key), 8)
 
     async def find_video(self, video_title: str, user_id: int) -> Video:
-        video = await self.repo.find_by_title(video_title, user_id)
+        video = await self.video_repo.find_by_title(video_title, user_id)
         if video is None:
             raise ResourceNotFoundException()
         return video
 
     async def validate_ownership(self, video_id: int, user_id: int) -> bool:
-        video = await self.repo.find_by_id(video_id)
+        video = await self.video_repo.find_by_id(video_id)
         if video.owner == user_id:
             return True
         else:

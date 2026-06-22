@@ -6,6 +6,7 @@ import dotenv
 
 from app.utils.models import load_clip_vision_model, load_clip_processor
 from app.db.connections import MariaDBConnection, QdrantConnection
+from app.s3.connections import S3Connection
 
 
 @worker_process_init.connect
@@ -19,6 +20,8 @@ def init_worker(sender: Celery, **kargs):
         load_clip_vision_model()
         load_clip_processor()
         QdrantConnection.init()
+    elif worker_type == "CPU":
+        S3Connection.init()
 
 
 celery_app = Celery(

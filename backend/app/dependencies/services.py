@@ -6,13 +6,15 @@ from app.services.video import VideoService
 from app.services.auth import AuthService
 from app.services.user import UserService
 from app.services.clip import CLIPService
-from .repositories import get_async_video_repository, get_async_user_repository, get_async_refresh_token_repository
+from app.s3.repositories import S3Repositories
+from .repositories import get_async_video_repository, get_async_user_repository, get_async_refresh_token_repository, get_s3_repository
 
 
 async def get_video_service(
     repo: AsyncVideoRepository = Depends(get_async_video_repository),
+    s3_repo: S3Repositories = Depends(get_s3_repository)
 ) -> VideoService:
-    return VideoService(repo)
+    return VideoService(repo, s3_repo)
 
 
 async def get_auth_service(

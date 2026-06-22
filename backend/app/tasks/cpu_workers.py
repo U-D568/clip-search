@@ -1,9 +1,12 @@
 from multiprocessing.shared_memory import SharedMemory
 import time
-from typing import List
+from typing import List, Iterable
+import subprocess
+import os
+import io
 
-import cv2
 import numpy as np
+import redis
 
 from app.enums import FrameState
 from app.db.models import VideoProgress, FrameProgress
@@ -16,103 +19,53 @@ from app.db.connections import MariaDBConnection
 from app.tasks.worker import celery_app
 from app.tasks.gpu_workers import frame_embedding
 from app.db.models import Frame
+from app.s3.repositories import S3Repositories
+from app.s3.connections import S3Connection
+from app.utils.file import numpy_to_bytesio
+from app.utils.frames import frame_generator, batch_generator
 
 
 @celery_app.task(queue="cpu_queue")
 def frame_extractor(
-    video_path: str, video_id: int, target_fps: float = 1.0, batch_size=32
+    video_path: str, video_id: int, interval: float = 1.0, batch_size=32
 ):
-    cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
-
-    imgs = []
-    frames = []
-    frame_progresses = []
+    # test code
+    video_path = "videos/30fd27cb-cf54-46f2-8624-8bf13a94a09a.mp4"
+    frame_gen = frame_generator(video_path, interval, "jpg")
+    batches = batch_generator(frame_gen, batch_size)
 
     with MariaDBConnection.get_session() as session:
         # DB repositories
         frame_repo = FrameRepository(session)
-        progress_repo = FrameProgressRepository(session)
+        s3_client = S3Connection.get_client()
+        s3_repo = S3Repositories(s3_client, os.environ["CLIP_BUCKET_NAME"])
 
-        # frame time
-        target_interval = 1.0 / target_fps
-        last_time = -target_interval
+        for batch in batches:
+            images = [item["frame"] for item in batch]
+            frames = []
+            s3_keys = []
 
-        while True:
-            ret, img = cap.read()
-            if not ret:
-                break
-
-            current_time = (
-                cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
-            )  # microsecends to seconds
-
-            # extract frame every target_interval(about 1s)
-            if current_time - last_time >= target_interval:
-                last_time = current_time
-                frame_idx = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-                timestamp = cap.get(cv2.CAP_PROP_POS_MSEC)
-
-                # Frame instnace
-                frame = Frame(video_key=video_id, timestamp=timestamp, index=frame_idx)
-                frames.append(frame)
-
-                # Frame progress instance
-                progress = FrameProgress(status=FrameState.CREATED)
-                progress.frame = frame
-                frame_progresses.append(progress)
-
-                imgs.append(img)
-
-            # process batch
-            if len(frames) >= batch_size:
-                process_batch(
-                    frames, frame_progresses, imgs, frame_repo, progress_repo, video_id
+            for item in batch:
+                timestamp = item["timestamp"]
+                index = item["index"]
+                frames.append(
+                    Frame(video_key=video_id, timestamp=timestamp, index=index)
                 )
-
-        # process batch if frames are remained in the list
-        if len(frames) > 0:
-            process_batch(
-                frames, frame_progresses, imgs, frame_repo, progress_repo, video_id
-            )
-
-    cap.release()
-
-
-def process_batch(
-    frames: List[Frame],
-    progresses: List[FrameProgress],
-    images: List[np.ndarray],
-    frame_repo: FrameRepository,
-    progress_repo: FrameProgressRepository,
-    video_id: int,
-):
-    # Insert Frames to MariaDB
-    try:
-        frame_repo.add_all(frames)
-        frame_repo.commit()
-        progress_repo.add_all(progresses)
-        progress_repo.commit()
-    except:
-        frame_repo.rollback()
-        progress_repo.rollback()
-        raise
-
-    # init shared memory
-    img_batch = np.stack(images)
-    bsize = img_batch.nbytes
-    shape = list(int(i) for i in img_batch.shape)
-    dtype = str(img_batch.dtype)
-
-    shm = SharedMemory(create=True, size=bsize)
-    shm_array = np.ndarray(shape, dtype, buffer=shm.buf)
-
-    # assign image to shared memory
-    shm_array[:] = img_batch[:]
-
-    frame_ids = [f.key for f in frames]
-
-    # embedding task
-    frame_embedding.delay(shm.name, shape, dtype, video_id, frame_ids)
-
-    frames.clear()
-    images.clear()
+            
+            try:
+                frame_repo.add_all(frames)
+                frame_repo.commit()
+            except:
+                frame_repo.rollback()
+                raise
+            
+            # upload to s3 storage
+            for i in range(len(frames)):
+                uuid = frames[i].uuid
+                s3_key = f"temp/{uuid}.jpg"
+                bytesio = numpy_to_bytesio(images[i], ".jpg")
+                s3_repo.upload(bytesio, s3_key)
+                s3_keys.append(s3_key)
+            
+            frame_ids = [f.id for f in frames]
+            frame_embedding.delay(s3_keys, video_id, frame_ids)

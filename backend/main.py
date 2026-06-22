@@ -7,10 +7,14 @@ import uvicorn
 
 from app.routes.video import video_router
 from app.routes.auth import auth_router
-from app.routes.test import test_router
-from app.db.connections import MariaDBConnection, AsyncMariaDBConnection, QdrantConnection
+from app.db.connections import (
+    MariaDBConnection,
+    AsyncMariaDBConnection,
+    QdrantConnection,
+)
 from app.db.models import BaseModel, User
 from app.enums import UserRole
+from app.s3.connections import S3Connection
 
 
 def create_app() -> FastAPI:
@@ -19,7 +23,6 @@ def create_app() -> FastAPI:
     # incldes routers
     app.include_router(video_router)
     app.include_router(auth_router)
-    app.include_router(test_router)
 
     # CORS
     allow_origins = ["http://localhost:8000"]
@@ -55,6 +58,9 @@ def on_init():
     # local video storage
     path = os.environ["LOCAL_VIDEO_STORAGE"]
     os.makedirs(path, exist_ok=True)
+
+    # S3 Initalization
+    S3Connection.init()
 
 
 def on_exit():

@@ -18,8 +18,8 @@ def save_video_to_local(file: BinaryIO, save_path: str) -> str:
     return save_path
 
 
-def numpy_to_bytesio(array: np.ndarray) -> BinaryIO:
-    _, encoded = cv2.imencode(".png", array)
+def numpy_to_bytesio(array: np.ndarray, format=".png") -> BinaryIO:
+    _, encoded = cv2.imencode(format, array)
     buffer = BytesIO(encoded.tobytes())
     return buffer
 

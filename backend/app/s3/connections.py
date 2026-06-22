@@ -5,10 +5,15 @@ import boto3
 
 class S3Connection:
     _client = None
-    
+
     @classmethod
     def init(cls):
-        cls._client = boto3.client("s3")
+        cls._client = boto3.client(
+            "s3",
+            aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+            aws_secret_access_key=os.environ["S3_ACCESS_SECRET_KEY"],
+            region_name="us-west-2",
+        )
 
     @classmethod
     def get_client(cls):
