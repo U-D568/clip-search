@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Float
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Float, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, relationship, mapped_column, Mapped
 from sqlalchemy.sql import func
 
@@ -13,6 +13,10 @@ class BaseModel(DeclarativeBase):
 
 class Video(BaseModel):
     __tablename__ = "video"
+
+    __table_args__ = (
+        UniqueConstraint('owner', 'title', name='uq_owner_video_title'),
+    )
 
     # columns
     key = Column(Integer, primary_key=True)
