@@ -3,6 +3,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import dotenv
 import uvicorn
 
 from app.routes.video import video_router
@@ -18,6 +19,7 @@ from app.s3.connections import S3Connection
 
 
 def create_app() -> FastAPI:
+    dotenv.load_dotenv(".env")
     app = FastAPI(lifespan=lifespan)
 
     # incldes routers

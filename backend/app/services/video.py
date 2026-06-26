@@ -17,6 +17,7 @@ from app.exceptions import (
     DuplicatedVideoTitleException,
 )
 from app.s3.repositories import S3Repositories
+from app.enums import VideoProgress
 
 
 class VideoService:
@@ -30,28 +31,28 @@ class VideoService:
         username = user.username
         s3_key = f"{username}/{title}{ext}"
 
-        if False:
-            try:
-                # update data to database
-                new_video = Video(
-                    file_path=s3_key,
-                    title=title,
-                    uploaded_time=datetime.now(),
-                    owner=user.key,
-                )
-                self.video_repo.add(new_video)
+        try:
+            # update data to database
+            new_video = Video(
+                file_path=s3_key,
+                title=title,
+                uploaded_time=datetime.now(),
+                owner=user.key,
+                state=VideoProgress.QUEUED
+            )
+            self.video_repo.add(new_video)
 
-                await self.video_repo.commit()
+            await self.video_repo.commit()
 
-                # upload to storage
-                self.s3_repo.upload(file.file, s3_key)
+            # upload to storage
+            self.s3_repo.upload(file.file, s3_key)
 
-            except IntegrityError as err:
-                await self.video_repo.rollback()
-                raise DuplicatedVideoTitleException(f"{title} is already exist")
-            except Exception as err:
-                await self.video_repo.rollback()
-                raise Exception(err)
+        except IntegrityError as err:
+            await self.video_repo.rollback()
+            raise DuplicatedVideoTitleException(f"{title} is already exist")
+        except Exception as err:
+            await self.video_repo.rollback()
+            raise Exception(err)
 
         # test code
         # frame_extractor.delay(str(s3_key), new_video.key)

@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.enums import FrameState
 from app.db.models import BaseModel, User, Video, Frame, VideoProgress, FrameProgress
 from app.schema.dto import QdrantPoint
+from app import enums
 
 
 ### MariaDB ###
@@ -52,6 +53,15 @@ class VideoRepository(BaseRepository):
 
     def add(self, video: Video):
         self.session.add(video)
+    
+    def get_by_id(self, video_id: int):
+        results = self.session.query(self.model).filter(VideoProgress.key == video_id)
+        return results.first()
+
+    def set_state(self, video_id: int, state: enums.VideoProgress):
+        video = self.session.query(Video).filter(Video.key == video_id).first()
+        if video is not None:
+            video.state = state
 
 
 class VideoProgressRepository(BaseRepository):
@@ -104,6 +114,10 @@ class FrameRepository(BaseRepository):
 
     def add_all(self, frames: List[Frame]):
         self.session.add_all(frames)
+    
+    def delete_all(self, frames: List[Frame]):
+        for frame in frames:
+            self.session.delete(frame)
 
     def search_by_ids(self, ids: List[int]) -> List[Frame]:
         return self.session.query(Frame).filter(Frame.key.in_(ids)).all()

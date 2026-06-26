@@ -1,5 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
-from typing import BinaryIO
+from typing import BinaryIO, List
 import logging
 import io
 
@@ -10,17 +11,17 @@ from app.db.models import Frame, Video
 
 class S3Repositories:
     def __init__(self, client, bucket_name: str):
-        self.client = client
-        self.bucket_name = bucket_name
+        self._client = client
+        self._bucket_name = bucket_name
 
     def upload(self, file_obj: BinaryIO, key: str):
-        self.client.upload_fileobj(file_obj, self.bucket_name, key)
+        self._client.upload_fileobj(file_obj, self._bucket_name, key)
 
     def get_url(self, key: str, expiration: int = 3600) -> str:
         try:
-            url = self.client.generate_presigned_url(
+            url = self._client.generate_presigned_url(
                 "get_object",
-                Params={"Bucket": self.bucket_name, "Key": key},
+                Params={"Bucket": self._bucket_name, "Key": key},
                 ExpiresIn=expiration,
             )
         except ClientError as e:
@@ -28,11 +29,21 @@ class S3Repositories:
             return None
         return url
 
-    def download_fileobj(self, key: str) -> io.BytesIO:
+    def download_fileobj(self, key: str) -> BinaryIO:
         bytesio = io.BytesIO()
-        self.client.download_fileobj(self.bucket_name, key, bytesio)
+        self._client.download_fileobj(self._bucket_name, key, bytesio)
         bytesio.seek(0)
         return bytesio
+    
+    def download_batch_fileobj(self, keys: List[str], max_workers=4) -> List[BinaryIO]:
+        results = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_iterator = executor.map(self.download_fileobj, keys)
+            for future in future_iterator:
+                results.append(future)
+                    
+        return results
 
     def download(self, key: str, path):
-        self.client.download_file(self.bucket_name, key, path)
+        self._client.download_file(self._bucket_name, key, path)

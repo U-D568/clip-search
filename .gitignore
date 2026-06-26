@@ -240,3 +240,4 @@ pyrightconfig.json
 backend/videos
 backend/test
 backend/storages
+*/test*.py

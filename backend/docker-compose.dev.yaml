@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
     environment:
       WORKER_TYPE: CPU
-      REDIS_URL: "redis://redis:6379/0"
+      BROKER_URL: "redis://redis:6379/0"
       MARIADB_URL: mariadb
     volumes:
       - ".:/app/:r"
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     environment:
       WORKER_TYPE: GPU
-      REDIS_URL: "redis://redis:6379/0"
+      BROKER_URL: "redis://redis:6379/0"
       MARIADB_URL: mariadb
       QDRANT_IP: qdrant
     volumes:

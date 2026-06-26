@@ -4,7 +4,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Floa
 from sqlalchemy.orm import DeclarativeBase, relationship, mapped_column, Mapped
 from sqlalchemy.sql import func
 
-from ..enums import UserRole, FrameState
+from ..enums import UserRole, FrameState, VideoProgress
 
 
 class BaseModel(DeclarativeBase):
@@ -25,6 +25,7 @@ class Video(BaseModel):
     uploaded_time = Column(DateTime, onupdate=func.current_timestamp)
     owner = Column(Integer, ForeignKey("user.key"), nullable=False)
     uuid = Column(String(36), unique=True, default=uuid.uuid4)
+    state = Column(Enum(VideoProgress))
 
     # relations
     user = relationship("User", back_populates="videos")

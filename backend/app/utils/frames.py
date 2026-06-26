@@ -2,6 +2,7 @@ import io
 import os
 import subprocess
 from typing import Iterable
+import time
 
 import cv2
 import numpy as np
@@ -55,7 +56,7 @@ def frame_generator(video_path: str, interval: float, format: str = "jpg"):
         "-hide_banner",
         "-loglevel",
         "error",
-        "-an"  # no audio
+        "-an",  # no audio
         "-i",  # input
         video_path,
         "-vf",
@@ -112,23 +113,3 @@ def bytes_to_numpy(bytesio: io.BytesIO) -> np.ndarray:
     image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR_RGB)
     return image
 
-
-if __name__ == "__main__":
-    bytesio = get_frame("backend/test/long_penguin_video.mp4", 2)
-
-    import sys
-    import os
-
-    cwd = os.getcwd()
-    sys.path.append(f"{cwd}/backend")
-
-    from app.s3.repositories import S3Repositories
-    from app.s3.connections import S3Connection
-    import dotenv
-
-    dotenv.load_dotenv("backend/.env")
-    S3Connection.init()
-    s3_client = S3Connection.get_client()
-    s3_repo = S3Repositories(s3_client, os.environ["CLIP_BUCKET_NAME"])
-    s3_repo.upload(bytesio, "test.jpg")
-    print(1)

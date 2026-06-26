@@ -9,6 +9,7 @@ class UserRole(Enum):
 class VideoProgress(Enum):
     QUEUED = "queued"
     IN_PROGRESS = "in_progress"
+    FRAME_COMPLETE = "f_complete"
     COMPLETE = "complete"
     ERROR = "error"
 
