@@ -2,14 +2,12 @@ from typing import List, Union, Optional
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
-    CollectionDescription,
     VectorParams,
     Distance,
     Filter,
     PointIdsList,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 
 from app.db.models import BaseModel, User, Video, Frame, VideoProgress, RefreshToken
@@ -39,7 +37,7 @@ class AsyncUserRepository(AsyncBaseRepository):
         return res.scalars().first()
 
     async def get_by_uuid(self, uuid: str) -> Optional[User]:
-        query = select(self.model).where(User.username == uuid)
+        query = select(self.model).where(User.uuid == uuid)
         res = await self.session.execute(query)
         return res.scalars().first()
 
@@ -76,6 +74,12 @@ class AsyncVideoRepository(AsyncBaseRepository):
         query = select(self.model).where(Video.owner == user_id, Video.title == video_title)
         res = await self.session.execute(query)
         return res.scalars().first()
+    
+    async def find_by_uuid(self, video_uuid: str, user_id: int) -> Optional[Video]:
+        query = select(self.model).where(Video.uuid == video_uuid, Video.owner == user_id)
+        res = await self.session.execute(query)
+        video = res.scalars().first()
+        return video
 
 
 class AsyncVideoProgressRepository(AsyncBaseRepository):

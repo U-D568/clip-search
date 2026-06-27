@@ -13,6 +13,13 @@ class VideoProgress(Enum):
     COMPLETE = "complete"
     ERROR = "error"
 
+    @classmethod
+    def from_string(cls, value):
+        try:
+            # finds Enum value corresponsding value automatically
+            return cls(value)
+        except ValueError:
+            return cls.ERROR
 
 class TokenType(Enum):
     ACCESS = "ACCESS"

@@ -17,7 +17,7 @@ class UserService:
             await self.user_repo.rollback()
             raise
 
-    async def get_user_id(self, uuid: str) -> User:
+    async def get_user(self, uuid: str) -> User:
         try:
             user = await self.user_repo.get_by_uuid(uuid)
             if user is None:

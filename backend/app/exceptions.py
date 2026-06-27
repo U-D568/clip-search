@@ -22,6 +22,8 @@ class UserAlreadyExistException(BaseException):
 class UserNotFoundException(BaseException):
     pass
 
+class VideoNotFoundException(BaseException):
+    pass
 
 class InvalidCredentialsException(BaseException):
     pass
@@ -38,4 +40,7 @@ class ResourceNotFoundException(BaseException):
     pass
 
 class DuplicatedVideoTitleException(BaseException):
+    pass
+
+class AuthenticationException(BaseException):
     pass

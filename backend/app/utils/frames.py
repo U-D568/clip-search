@@ -1,8 +1,6 @@
 import io
-import os
 import subprocess
 from typing import Iterable
-import time
 
 import cv2
 import numpy as np
@@ -72,7 +70,7 @@ def frame_generator(video_path: str, interval: float, format: str = "jpg"):
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        bufsize=200 * (1 << 20),  # 512 MiB
+        bufsize=512 * (1 << 20),  # 512 MiB
     )
 
     buffer = b""

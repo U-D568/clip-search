@@ -175,9 +175,11 @@ class QdrantRepository:
             must=[FieldCondition(key="video_id", match=MatchValue(value=video_id))]
         )
 
-        results = self.search(collection_name, text_embeds, query_filter, topk)
-        frame_ids = [res.payload.get() for res in results]
-        return frame_ids
+        response = self.search(collection_name, text_embeds[0], query_filter, topk)
+        timestamps = []
+        for point in response.points:
+            timestamps.append(point.payload["timestamp"])
+        return timestamps
 
     def delete(self, collection_name: str, filter: Filter):
         return self.client.delete(collection_name, points_selector=filter)

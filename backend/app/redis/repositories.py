@@ -8,40 +8,53 @@ class RedisRepository:
         self.client = client
 
     def init_tracker(self, uuid: str):
+        name = self._video_key(uuid)
         self.client.hset(
-            uuid,
+            name,
             mapping={
                 "tasks": 0,
                 "processed": 0,
                 "state": VideoProgress.IN_PROGRESS.value,
             },
         )
-        self.client.expire(uuid, 3600 * 3)
+        self.client.expire(name, 3600 * 3)
 
     def add_video_tasks(self, uuid: str, value: int):
-        self.client.hincrby(uuid, "tasks", value)
+        name = self._video_key(uuid)
+        self.client.hincrby(name, "tasks", value)
 
     def add_video_processed(self, uuid: str, value: int):
-        self.client.hincrby(uuid, "processed", value)
+        name = self._video_key(uuid)
+        self.client.hincrby(name, "processed", value)
 
     def set_video_state(self, uuid: str, state: VideoProgress):
-        self.client.hset(uuid, "state", state.value)
+        name = self._video_key(uuid)
+        self.client.hset(name, "state", state.value)
     
     def get_video_tasks(self, uuid: str):
-        return self.client.hget(uuid, "tasks")
+        name = self._video_key(uuid)
+        return self.client.hget(name, "tasks")
     
     def get_video_processed(self, uuid: str):
-        return self.client.hget(uuid, "processed")
+        name = self._video_key(uuid)
+        return self.client.hget(name, "processed")
 
-    def get_video_state(self, uuid: str):
-        state = self.client.hget(uuid, "state")
-        if state == VideoProgress.IN_PROGRESS.value:
-            return VideoProgress.IN_PROGRESS
-        elif state == VideoProgress.QUEUED.value:
-            return VideoProgress.QUEUED
-        elif state == VideoProgress.FRAME_COMPLETE.value:
-            return VideoProgress.FRAME_COMPLETE
-        elif state == VideoProgress.COMPLETE.value:
-            return VideoProgress.COMPLETE
-        else:
-            return VideoProgress.ERROR
+    def get_video_state(self, uuid: str) -> VideoProgress:
+        name = self._video_key(uuid)
+        state = self.client.hget(name, "state")
+        return VideoProgress.from_string(state)
+    
+    def _video_key(self, key: str):
+        return f"video-{key}"
+    
+    def _text_query_key(self, key: str):
+        return f"query-{key}"
+    
+    def register_task(self, task_id: str, user_id: str):
+        key = self._text_query_key(task_id)
+        self.client.set(key, user_id)
+        self.client.expire(key, 3600)
+    
+    def get_task_owner(self, task_id: str) -> str:
+        key = self._text_query_key(task_id)
+        return self.client.get(key)

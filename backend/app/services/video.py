@@ -1,7 +1,5 @@
 from datetime import datetime
-import os
 from pathlib import Path
-import uuid
 
 from fastapi import UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -9,10 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models import Video, User
 from app.db.repositories import AsyncVideoRepository
 from app.tasks.cpu_workers import frame_extractor
-from app.utils.file import save_video_to_local
 from app.exceptions import (
-    FileWriteException,
-    DBWriteException,
     ResourceNotFoundException,
     DuplicatedVideoTitleException,
 )
@@ -54,19 +49,23 @@ class VideoService:
             await self.video_repo.rollback()
             raise Exception(err)
 
-        # test code
-        # frame_extractor.delay(str(s3_key), new_video.key)
-        frame_extractor.delay(str(s3_key), 8)
+        frame_extractor.delay(s3_key, new_video.key)
 
-    async def find_video(self, video_title: str, user_id: int) -> Video:
-        video = await self.video_repo.find_by_title(video_title, user_id)
+    async def find_video(self, video_title: str, user: User) -> Video:
+        video = await self.video_repo.find_by_title(video_title, user.key)
+        if video is None:
+            raise ResourceNotFoundException()
+        return video
+    
+    async def find_video_by_uuid(self, video_uuid: str, user: User) -> Video:
+        video = await self.video_repo.find_by_uuid(video_uuid, user.key)
         if video is None:
             raise ResourceNotFoundException()
         return video
 
-    async def validate_ownership(self, video_id: int, user_id: int) -> bool:
-        video = await self.video_repo.find_by_id(video_id)
-        if video.owner == user_id:
+    async def validate_ownership(self, video: Video, user: User) -> bool:
+        video = await self.video_repo.find_by_id(video.key)
+        if video.owner == user.key:
             return True
         else:
             return False

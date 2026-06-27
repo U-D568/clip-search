@@ -1,6 +1,8 @@
 import os
 from typing import List
 
+from celery.result import AsyncResult
+from starlette.concurrency import run_in_threadpool
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 import numpy as np
 import torch
@@ -14,21 +16,45 @@ from app.encoders.encoder import (
 )
 from app.utils.ops import cosine_similarity
 from app.db.repositories import QdrantRepository, AsyncFrameRepository
+from app.db.models import Video, User
 from app.schema.dto import QdrantPoint
 from app.tasks.gpu_workers import text_embedding
+from app.redis.connections import RedisConnection
+from app.redis.repositories import RedisRepository
+from app.exceptions import AuthenticationException
 
 
 class CLIPService:
-    def __init__(self, frame_repo: AsyncFrameRepository):
-        self.frame_repo = frame_repo
+    def __init__(self):
         pass
 
-    def query_frame(self, query_text: str, video_id: int):
-        task = text_embedding.delay(query_text, video_id)
-        ids = task.get(timeout=20)
+    def query_frame(self, query_text: str, video: Video, user: User):
+        # init redis repo
+        redis_client = RedisConnection.get_client()
+        redis_repo = RedisRepository(redis_client)
 
-        frames = self.frame_repo.search_by_ids(ids)
-        return frames
+        # start embedding task
+        task = text_embedding.delay(query_text, video.key)
+
+        # add to redis
+        redis_repo.register_task(task.id, user.uuid)
+        return task.id
+
+    async def get_query_result(self, task_id: str, user: User) -> List[str]:
+        # init redis repo
+        redis_client = RedisConnection.get_client()
+        redis_repo = RedisRepository(redis_client)
+
+        # validate task ownership
+        owner_uuid = redis_repo.get_task_owner(task_id)
+        if owner_uuid != user.uuid:
+            raise AuthenticationException()
+        
+        # retrieve the result of text embedding task
+        task = AsyncResult(task_id)
+        timestamps = await run_in_threadpool(task.get)
+
+        return timestamps
 
 
 class CLIPServiceLegacy:

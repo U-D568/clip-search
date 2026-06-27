@@ -1,5 +1,4 @@
 import os
-import sys
 
 import redis
 
@@ -16,5 +15,5 @@ class RedisConnection:
     @classmethod
     def get_client(cls) -> redis.Redis:
         if cls._client is None:
-            raise RuntimeError("S3 Client is not initialized")
+            raise RuntimeError("Redis Client is not initialized")
         return cls._client

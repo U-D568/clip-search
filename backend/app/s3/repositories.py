@@ -1,12 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
-import os
 from typing import BinaryIO, List
 import logging
 import io
 
 from botocore.exceptions import ClientError
-
-from app.db.models import Frame, Video
 
 
 class S3Repositories:
@@ -17,7 +14,12 @@ class S3Repositories:
     def upload(self, file_obj: BinaryIO, key: str):
         self._client.upload_fileobj(file_obj, self._bucket_name, key)
 
-    def get_url(self, key: str, expiration: int = 3600) -> str:
+    def batch_upload(self, file_objs: List[BinaryIO], keys: List[str], max_workers=4):
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            executor.map(self.upload, file_objs, keys)
+            executor.shutdown(wait=True)
+
+    def get_url(self, key: str, expiration: int = 1800) -> str:
         try:
             url = self._client.generate_presigned_url(
                 "get_object",
@@ -34,7 +36,7 @@ class S3Repositories:
         self._client.download_fileobj(self._bucket_name, key, bytesio)
         bytesio.seek(0)
         return bytesio
-    
+
     def download_batch_fileobj(self, keys: List[str], max_workers=4) -> List[BinaryIO]:
         results = []
 
@@ -42,7 +44,7 @@ class S3Repositories:
             future_iterator = executor.map(self.download_fileobj, keys)
             for future in future_iterator:
                 results.append(future)
-                    
+
         return results
 
     def download(self, key: str, path):

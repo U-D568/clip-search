@@ -1,19 +1,8 @@
-from multiprocessing.shared_memory import SharedMemory
-import time
-from typing import List, Iterable
-import subprocess
 import os
-import io
 
-import numpy as np
-import redis
-
-from app.enums import FrameState
-from app.db.models import VideoProgress, FrameProgress
+from app.db.models import VideoProgress
 from app.db.repositories import (
-    VideoProgressRepository,
     FrameRepository,
-    FrameProgressRepository,
 )
 from app.db.connections import MariaDBConnection
 from app.tasks.worker import celery_app
@@ -23,7 +12,6 @@ from app.s3.repositories import S3Repositories
 from app.s3.connections import S3Connection
 from app.redis.repositories import RedisRepository
 from app.redis.connections import RedisConnection
-from app.utils.file import numpy_to_bytesio
 from app.utils.frames import frame_generator, batch_generator
 from app.enums import VideoProgress
 
@@ -32,18 +20,19 @@ from app.enums import VideoProgress
 def frame_extractor(
     video_path: str, video_id: int, interval: float = 1.0, batch_size=32
 ):
-    # test code
-    video_path = "test/short_penguin_video.mp4"
-    frame_gen = frame_generator(video_path, interval, "jpg")
+    # init repositories
+    s3_client = S3Connection.get_client()
+    s3_repo = S3Repositories(s3_client, os.environ["CLIP_BUCKET_NAME"])
+    redis_client = RedisConnection.get_client()
+    redis_repo = RedisRepository(redis_client)
+
+    video_url = s3_repo.get_url(video_path)
+    frame_gen = frame_generator(video_url, interval, "jpg")
     batches = batch_generator(frame_gen, batch_size)
 
     with MariaDBConnection.get_session() as session:
         # DB repositories
         frame_repo = FrameRepository(session)
-        s3_client = S3Connection.get_client()
-        s3_repo = S3Repositories(s3_client, os.environ["CLIP_BUCKET_NAME"])
-        redis_client = RedisConnection.get_client()
-        redis_repo = RedisRepository(redis_client)
 
         for batch in batches:
             frames = []
@@ -73,6 +62,5 @@ def frame_extractor(
             redis_repo.add_video_tasks(video_id, len(batch))
 
             frame_ids = [f.key for f in frames]
-            frame_embedding(s3_keys, video_id, frame_ids)
-            # frame_embedding.delay(s3_keys, video_id, frame_ids)
+            frame_embedding.delay(s3_keys, video_id, frame_ids)
         redis_repo.set_video_state(video_id, VideoProgress.FRAME_COMPLETE)

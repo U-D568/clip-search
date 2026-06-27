@@ -120,6 +120,6 @@ def text_embedding(text_query: str, video_id: int, topk=5) -> List[int]:
     qdrant_client = QdrantConnection.get_client()
     collection_name = os.environ["FRAME_COLLECTION"]
     qdrant_repo = QdrantRepository(qdrant_client, collection_name)
-    ids = qdrant_repo.query_image_in_video(collection_name, text_embeds, video_id, topk)
+    timestamps = qdrant_repo.query_image_in_video(collection_name, text_embeds, video_id, topk)
 
-    return ids
+    return timestamps

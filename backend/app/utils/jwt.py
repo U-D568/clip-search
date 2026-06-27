@@ -1,11 +1,9 @@
 import os
 from typing import Optional
 
-from fastapi import Depends, Request
+from fastapi import Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-
-from app.exceptions import InvalidCredentialsException
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -30,7 +28,7 @@ async def verify_access_token(request: Request) -> bool:
         return False
 
 
-async def get_current_username(request: Request) -> Optional[str]:
+async def get_username(request: Request) -> Optional[str]:
     token = request.cookies.get("access_token")
     if token is None:
         return None
