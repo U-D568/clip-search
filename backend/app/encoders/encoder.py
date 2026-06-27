@@ -12,7 +12,7 @@ def text_encoding(model, processor, text: str, device: str) -> torch.Tensor:
     text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
     eos_pos = get_eos_pos(text_inputs)
     with torch.no_grad():
-        text_outputs = model.get_text_features(**text_inputs)
+        text_outputs = model(**text_inputs)
     last_hidden_state = text_outputs.last_hidden_state
     text_embeds = last_hidden_state[torch.arange(last_hidden_state.size(0)), eos_pos, :]
 
