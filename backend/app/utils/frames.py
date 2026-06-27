@@ -72,7 +72,7 @@ def frame_generator(video_path: str, interval: float, format: str = "jpg"):
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        bufsize=100 * (1 << 20),  # 100 MiB
+        bufsize=200 * (1 << 20),  # 512 MiB
     )
 
     buffer = b""

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, HTTPException, Depends, Form
 from fastapi.responses import JSONResponse
 
 from app.services.video import VideoService
@@ -24,7 +24,7 @@ video_router = APIRouter(prefix="/video", tags=["video"])
 @video_router.post("/upload")
 async def upload_video(
     file: UploadFile,
-    title: str,
+    title: str = Form(...),
     video_service: VideoService = Depends(get_video_service),
     user_service: UserService = Depends(get_user_service),
     username: str = Depends(get_current_username),
