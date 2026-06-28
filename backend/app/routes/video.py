@@ -68,7 +68,7 @@ async def query_frame(
     return JSONResponse({"task_id": task_id, "result": "ok"}, status_code=200)
 
 
-@video_router.post("/query-result")
+@video_router.websocket("/query-result")
 async def receive_result_webhook(
     websocket: WebSocket,
     task_id: str = Form(...),
@@ -85,3 +85,31 @@ async def receive_result_webhook(
         raise HTTPException(403, detail=f"Authentication Failed")
     finally:
         websocket.close()
+
+
+@video_router.get("/list")
+async def list_videos(
+    video_service: VideoService = Depends(get_video_service),
+    user_service: UserService = Depends(get_user_service),
+    username: str = Depends(get_username),
+):
+    if username is None:
+        raise HTTPException(401, detail="Invalid Credential.")
+    try:
+        user = await user_service.get_user_by_username(username)
+        videos = await video_service.get_all_videos(user)
+    except UserNotFoundException:
+        raise HTTPException(401, detail=f"Unknown username: {username}")
+
+    return JSONResponse(
+        [
+            {
+                "uuid": video.uuid,
+                "title": video.title,
+                "state": video.state.value if video.state else None,
+                "uploaded_time": video.uploaded_time.isoformat() if video.uploaded_time else None,
+            }
+            for video in videos
+        ],
+        status_code=200,
+    )

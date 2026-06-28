@@ -81,6 +81,11 @@ class AsyncVideoRepository(AsyncBaseRepository):
         video = res.scalars().first()
         return video
 
+    async def find_all_by_user_id(self, user_id: int) -> List[Video]:
+        query = select(self.model).where(Video.owner == user_id)
+        res = await self.session.execute(query)
+        return list(res.scalars().all())
+
 
 class AsyncVideoProgressRepository(AsyncBaseRepository):
     def __init__(self, session: AsyncSession):

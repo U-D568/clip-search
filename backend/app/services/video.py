@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
 from fastapi import UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -69,3 +70,6 @@ class VideoService:
             return True
         else:
             return False
+
+    async def get_all_videos(self, user: User) -> List[Video]:
+        return await self.video_repo.find_all_by_user_id(user.key)
