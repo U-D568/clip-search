@@ -35,4 +35,28 @@ apiClient.interceptors.response.use(
   }
 );
 
+export const getWebSocketUrl = (path: string): string => {
+  const apiBaseUrl = apiClient.defaults.baseURL || '';
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  const fallbackUrl = import.meta.env.VITE_FALLBACK_API_URL || 'http://localhost:8000';
+  const targetUrl = apiBaseUrl || fallbackUrl;
+  let host = 'localhost:8000';
+
+  try {
+    const url = new URL(targetUrl);
+    host = url.host;
+  } catch {
+    if (targetUrl.startsWith('http')) {
+      const match = targetUrl.match(/^https?:\/\/([^/]+)/);
+      if (match) host = match[1];
+    } else {
+      host = targetUrl;
+    }
+  }
+
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${wsProtocol}//${host}${cleanPath}`;
+};
+
 export default apiClient;

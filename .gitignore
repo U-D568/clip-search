@@ -235,6 +235,8 @@ pyrightconfig.json
 .venv
 .cache
 .vscode
+k8s
+.agent
 
 ### Backend ###
 backend/videos
