@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, HTTPException, Depends, Form, WebSocket
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import asyncio
 
 from app.services.video import VideoService
 from app.services.user import UserService
@@ -18,6 +19,11 @@ from app.exceptions import (
     AuthenticationException,
 )
 from app.utils.jwt import get_username
+from app.enums import VideoProgress
+from app.redis.connections import RedisConnection
+from app.redis.repositories import RedisRepository
+from app.db.connections import AsyncMariaDBConnection
+from app.db.repositories import AsyncUserRepository, AsyncVideoRepository
 
 video_router = APIRouter(prefix="/video", tags=["video"])
 
@@ -101,15 +107,14 @@ async def list_videos(
     except UserNotFoundException:
         raise HTTPException(401, detail=f"Unknown username: {username}")
 
-    return JSONResponse(
-        [
-            {
-                "uuid": video.uuid,
-                "title": video.title,
-                "state": video.state.value if video.state else None,
-                "uploaded_time": video.uploaded_time.isoformat() if video.uploaded_time else None,
-            }
-            for video in videos
-        ],
-        status_code=200,
-    )
+    result = [
+        {
+            "uuid": video.uuid,
+            "title": video.title,
+            "state": video.state.value,
+            "uploaded_time": video.uploaded_time.isoformat(),
+        }
+        for video in videos
+    ]
+
+    return JSONResponse(result, status_code=200)

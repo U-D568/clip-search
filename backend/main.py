@@ -16,6 +16,7 @@ from app.db.connections import (
 from app.db.models import BaseModel, User
 from app.enums import UserRole
 from app.s3.connections import S3Connection
+from app.redis.connections import RedisConnection
 
 
 def create_app() -> FastAPI:
@@ -27,7 +28,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
 
     # CORS
-    allow_origins = ["http://localhost:8000"]
+    allow_origins = [url.strip() for url in os.environ["ALLOW_ORIGINS"].split(",")]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allow_origins,
@@ -63,6 +64,11 @@ def on_init():
 
     # S3 Initalization
     S3Connection.init()
+
+    # Redis
+    RedisConnection.init()
+
+    QdrantConnection.init()
 
 
 def on_exit():
