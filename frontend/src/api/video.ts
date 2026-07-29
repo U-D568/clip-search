@@ -18,7 +18,7 @@ export interface QueryResultResponse {
 export interface VideoItem {
   uuid: string;
   title: string;
-  state: 'queued' | 'in_progress' | 'complete' | 'f_complete' | 'error';
+  state: 'queued' | 'processing' | 'complete' | 'error';
   uploaded_time: string;
 }
 
@@ -77,5 +77,15 @@ export const queryVideo = async (queryText: string, videoUuid: string): Promise<
   });
   return response.data;
 };
+
+/**
+ * Deletes a video.
+ * Backend endpoint: DELETE /video/{uuid}
+ */
+export const deleteVideo = async (uuid: string): Promise<{ result: string }> => {
+  const response = await apiClient.delete<{ result: string }>(`/video/${uuid}`);
+  return response.data;
+};
+
 
 

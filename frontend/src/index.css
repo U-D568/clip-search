@@ -509,6 +509,37 @@ code {
   width: 100%;
 }
 
+.video-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.delete-video-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text);
+  opacity: 0.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  margin-top: -2px;
+  margin-right: -2px;
+}
+
+.delete-video-btn:hover {
+  color: #ef4444;
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+
 /* Collapsing overrides to prevent layout breaks on zero-width slide animations */
 .dashboard-sidebar.collapsed .sidebar-title,
 .dashboard-sidebar.collapsed .video-list-empty span,
@@ -538,7 +569,7 @@ code {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-.status-badge.in_progress {
+.status-badge.in_progress, .status-badge.processing {
   background: rgba(59, 130, 246, 0.15);
   color: #2563eb;
   border: 1px solid rgba(59, 130, 246, 0.3);

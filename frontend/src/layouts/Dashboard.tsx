@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import VideoSidebar from '../pages/VideoSidebar';
+import { getVideos } from '../api/video';
 
 interface LocalVideoMeta {
   uuid: string;
   title: string;
-  state: 'queued' | 'in_progress' | 'complete' | 'f_complete' | 'error';
+  state: 'queued' | 'processing' | 'complete' | 'error';
   uploaded_time: string;
   fileName: string;
 }
@@ -20,30 +21,42 @@ export interface DashboardContextType {
   setSessionFiles: React.Dispatch<React.SetStateAction<{ [uuid: string]: File }>>;
   selectedVideoUuid: string;
   setSelectedVideoUuid: React.Dispatch<React.SetStateAction<string>>;
+  refreshVideos: () => Promise<LocalVideoMeta[]>;
 }
 
 export const Dashboard: React.FC = () => {
   const { getCurrentUser, logout } = useAuth();
   const user = getCurrentUser();
-  const location = useLocation();
+
 
   // 1. Shared core data states for state-lifting across nested routes
-  const [videos, setVideos] = useState<LocalVideoMeta[]>(() => {
-    if (user) {
-      const saved = localStorage.getItem(`videos_${user.username}`);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
-    return [];
-  });
-
+  const [videos, setVideos] = useState<LocalVideoMeta[]>([]);
   const [sessionFiles, setSessionFiles] = useState<{ [uuid: string]: File }>({});
   const [selectedVideoUuid, setSelectedVideoUuid] = useState<string>('');
+
+  const fetchVideos = async (): Promise<LocalVideoMeta[]> => {
+    try {
+      const data = await getVideos();
+      const mapped: LocalVideoMeta[] = data.map(item => ({
+        uuid: item.uuid,
+        title: item.title,
+        state: item.state,
+        uploaded_time: item.uploaded_time,
+        fileName: item.title,
+      }));
+      setVideos(mapped);
+      return mapped;
+    } catch (err) {
+      console.error('Failed to fetch videos from backend:', err);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchVideos();
+    }
+  }, [user?.username]);
 
   // 2. Sidebar structural states
   const [sidebarWidth, setSidebarWidth] = useState(300);
@@ -104,20 +117,15 @@ export const Dashboard: React.FC = () => {
 
   // 3. Render sidebar content dynamically based on the current active URL path
   const renderSidebarContent = () => {
-    // We display VideoSidebar for the home path (/)
-    if (location.pathname === '/' || location.pathname === '') {
-      return (
-        <VideoSidebar
-          videos={videos}
-          setVideos={setVideos}
-          setSessionFiles={setSessionFiles}
-          selectedVideoUuid={selectedVideoUuid}
-          onSelectVideo={(uuid) => setSelectedVideoUuid(uuid)}
-        />
-      );
-    }
-    // Expandable: return specific sidebars for other routes (e.g. settings sidebar)
-    return null;
+    return (
+      <VideoSidebar
+        videos={videos}
+        setSessionFiles={setSessionFiles}
+        selectedVideoUuid={selectedVideoUuid}
+        onSelectVideo={(uuid) => setSelectedVideoUuid(uuid)}
+        refreshVideos={fetchVideos}
+      />
+    );
   };
 
   const contextValue: DashboardContextType = {
@@ -126,7 +134,8 @@ export const Dashboard: React.FC = () => {
     sessionFiles,
     setSessionFiles,
     selectedVideoUuid,
-    setSelectedVideoUuid
+    setSelectedVideoUuid,
+    refreshVideos: fetchVideos
   };
 
   return (
