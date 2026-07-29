@@ -120,8 +120,9 @@ class AsyncFrameRepository(AsyncBaseRepository):
 
 ### Qdrant ###
 class AsyncQdrantRepository:
-    def __init__(self, client: AsyncQdrantClient):
+    def __init__(self, client: AsyncQdrantClient, collection_name):
         self.client = client
+        self.collection_name = collection_name
 
     async def get_collection(self, collection_name: str):
         res = await self.client.get_collection(collection_name)
@@ -136,25 +137,26 @@ class AsyncQdrantRepository:
             collection_name, vectors_config=config
         )
 
-    async def upsert_data(self, collection_name: str, data=List[QdrantPoint]):
-        return await self.client.upsert(collection_name, points=data)
+    async def upsert_data(self, data=List[QdrantPoint]):
+        return await self.client.upsert(self.collection_name, points=data)
 
-    async def delete_by_ids(self, collection_name: str, ids: List[int]):
+    async def delete_by_ids(self, ids: List[int]):
         selector = PointIdsList(points=ids)
-        return await self.client.delete(collection_name, points_selector=selector)
+        return await self.client.delete(self.collection_name, points_selector=selector)
 
-    async def search_by_id(self, collection_name: str, id=Union[str, int]):
-        return await self.client.query_points(collection_name, query=id)
+    async def search_by_id(self, id=Union[str, int]):
+        return await self.client.query_points(self.collection_name, query=id)
 
     async def search(
         self,
-        collection_name: str,
         query_vector: Optional[List[float]],
         filter: Filter,
     ):
         return await self.client.query_points(
-            collection_name=collection_name, query=query_vector, query_filter=filter
+            collection_name=self.collection_name,
+            query=query_vector,
+            query_filter=filter,
         )
 
-    async def delete(self, collection_name: str, filter: Filter):
-        return await self.client.delete(collection_name, points_selector=filter)
+    async def delete(self, filter: Filter):
+        return await self.client.delete(self.collection_name, points_selector=filter)

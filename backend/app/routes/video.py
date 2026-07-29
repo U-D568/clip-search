@@ -130,8 +130,8 @@ async def remove_video(
     if username is None:
         raise HTTPException(401, detail="Invalid Credential.")
 
-    video = await video_service.find_video_by_uuid(video_uuid)
     user = await user_service.get_user_by_username(username)
+    video = await video_service.find_video_by_uuid(video_uuid, user)
     await video_service.remove_video(video, user)
 
     return JSONResponse({"result": "ok"}, status_code=200)

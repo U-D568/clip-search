@@ -7,11 +7,13 @@ from .databases import (
     get_mariadb_connection,
     get_async_mariadb_connection,
     get_s3_client,
+    get_async_qdrant_client,
 )
 from app.db.repositories import (
     AsyncVideoRepository,
     AsyncUserRepository,
     AsyncRefreshTokenRepository,
+    AsyncQdrantRepository,
 )
 from app.s3.repositories import S3Repositories
 
@@ -37,3 +39,10 @@ async def get_async_refresh_token_repository(
 async def get_s3_repository(client=Depends(get_s3_client)) -> S3Repositories:
     bucket_name = os.environ["CLIP_BUCKET_NAME"]
     return S3Repositories(client, bucket_name)
+
+
+async def get_async_qdrant_reposiroty(
+    client=Depends(get_async_qdrant_client),
+) -> AsyncQdrantRepository:
+    collection_name = os.environ["FRAME_COLLECTION"]
+    return AsyncQdrantRepository(client, collection_name)

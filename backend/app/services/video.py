@@ -3,10 +3,11 @@ from pathlib import Path
 from typing import List
 
 from fastapi import UploadFile
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Video, User
-from app.db.repositories import AsyncVideoRepository
+from app.db.repositories import AsyncVideoRepository, AsyncQdrantRepository
 from app.tasks.cpu_workers import frame_extractor
 from app.exceptions import (
     ResourceNotFoundException,
@@ -18,9 +19,15 @@ from app.enums import VideoProgress
 
 
 class VideoService:
-    def __init__(self, video_repo: AsyncVideoRepository, s3_repo: S3Repositories):
+    def __init__(
+        self,
+        video_repo: AsyncVideoRepository,
+        s3_repo: S3Repositories,
+        qdrant_repo: AsyncQdrantRepository,
+    ):
         self.video_repo = video_repo
         self.s3_repo = s3_repo
+        self.qdrant_repo = qdrant_repo
 
     async def register_video(self, file: UploadFile, title: str, user: User):
         # save to s3 storage
@@ -81,6 +88,11 @@ class VideoService:
         try:
             await self.video_repo.delete(video)
             await self.video_repo.commit()
+            qdrant_filter = Filter(
+                must=FieldCondition(key=video_key, match=MatchValue(value=video.key))
+            )
+            self.qdrant_repo.delete(qdrant_filter)
+            qdrant_repo.delete(collection_name, qdrant_filter)
         except Exception as err:
             await self.video_repo.rollback()
             raise Exception(err)

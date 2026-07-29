@@ -68,8 +68,6 @@ def on_init():
     # Redis
     RedisConnection.init()
 
-    QdrantConnection.init()
-
 
 def on_exit():
     pass
