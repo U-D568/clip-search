@@ -11,6 +11,7 @@ from app.tasks.cpu_workers import frame_extractor
 from app.exceptions import (
     ResourceNotFoundException,
     DuplicatedVideoTitleException,
+    InvalidCredentialsException,
 )
 from app.s3.repositories import S3Repositories
 from app.enums import VideoProgress
@@ -34,7 +35,7 @@ class VideoService:
                 title=title,
                 uploaded_time=datetime.now(),
                 owner=user.key,
-                state=VideoProgress.QUEUED
+                state=VideoProgress.QUEUED,
             )
             self.video_repo.add(new_video)
 
@@ -57,7 +58,7 @@ class VideoService:
         if video is None:
             raise ResourceNotFoundException()
         return video
-    
+
     async def find_video_by_uuid(self, video_uuid: str, user: User) -> Video:
         video = await self.video_repo.find_by_uuid(video_uuid, user.key)
         if video is None:
@@ -73,3 +74,13 @@ class VideoService:
 
     async def get_all_videos(self, user: User) -> List[Video]:
         return await self.video_repo.find_all_by_user_id(user.key)
+
+    async def remove_video(self, video: Video, user: User):
+        if video.owner != user.key:
+            raise InvalidCredentialsException()
+        try:
+            await self.video_repo.delete(video)
+            await self.video_repo.commit()
+        except Exception as err:
+            await self.video_repo.rollback()
+            raise Exception(err)

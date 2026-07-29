@@ -69,14 +69,18 @@ class AsyncVideoRepository(AsyncBaseRepository):
         query = select(self.model).where(Video.key == video_id)
         res = await self.session.execute(query)
         return res.scalars().first()
-    
+
     async def find_by_title(self, video_title: str, user_id: int) -> Optional[Video]:
-        query = select(self.model).where(Video.owner == user_id, Video.title == video_title)
+        query = select(self.model).where(
+            Video.owner == user_id, Video.title == video_title
+        )
         res = await self.session.execute(query)
         return res.scalars().first()
-    
+
     async def find_by_uuid(self, video_uuid: str, user_id: int) -> Optional[Video]:
-        query = select(self.model).where(Video.uuid == video_uuid, Video.owner == user_id)
+        query = select(self.model).where(
+            Video.uuid == video_uuid, Video.owner == user_id
+        )
         res = await self.session.execute(query)
         video = res.scalars().first()
         return video
@@ -86,13 +90,16 @@ class AsyncVideoRepository(AsyncBaseRepository):
         res = await self.session.execute(query)
         return list(res.scalars().all())
 
+    async def delete(self, video: Video):
+        await self.session.delete(video)
+
 
 class AsyncVideoProgressRepository(AsyncBaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(VideoProgress, session)
 
-    def add(self, progress: VideoProgress):
-        self.session.add(progress)
+    async def add(self, progress: VideoProgress):
+        await self.session.add(progress)
 
 
 class AsyncFrameRepository(AsyncBaseRepository):

@@ -118,3 +118,20 @@ async def list_videos(
     ]
 
     return JSONResponse(result, status_code=200)
+
+
+@video_router.delete("/{video_uuid}")
+async def remove_video(
+    video_uuid: str,
+    video_service: VideoService = Depends(get_video_service),
+    user_service: UserService = Depends(get_user_service),
+    username: str = Depends(get_username),
+):
+    if username is None:
+        raise HTTPException(401, detail="Invalid Credential.")
+
+    video = await video_service.find_video_by_uuid(video_uuid)
+    user = await user_service.get_user_by_username(username)
+    await video_service.remove_video(video, user)
+
+    return JSONResponse({"result": "ok"}, status_code=200)
