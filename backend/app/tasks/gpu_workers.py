@@ -95,14 +95,16 @@ def frame_embedding(s3_keys: List[str], video_id: int, frame_ids: List[int]):
         # update progress to DB
         video_state = redis_repo.get_video_state(video_id)
         if video_state == VideoProgress.FRAME_COMPLETE:
-            task_count = redis_repo.get_video_tasks(video_id)
-            processed_count = redis_repo.get_video_processed(video_id)
+            task_count = int(redis_repo.get_video_tasks(video_id))
+            processed_count = int(redis_repo.get_video_processed(video_id))
 
             if task_count == processed_count:
-                redis_repo.set_video_state(video_id, VideoProgress.COMPLETE)
-                video_repo.set_state(video_id, VideoProgress.COMPLETE)
-                video_repo.commit()
-
+                try:
+                    redis_repo.set_video_state(video_id, VideoProgress.COMPLETE)
+                    video_repo.set_state(video_id, VideoProgress.COMPLETE)
+                    video_repo.commit()
+                except:
+                    video_repo.rollback()
 
 @celery_app.task(queue="text_queue")
 def text_embedding(text_query: str, video_id: int, topk=5) -> List[int]:

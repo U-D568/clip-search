@@ -22,7 +22,7 @@ class Video(BaseModel):
     key = Column(Integer, primary_key=True)
     title = Column(String(512))
     file_path = Column(String(512))
-    uploaded_time = Column(DateTime, onupdate=func.current_timestamp)
+    uploaded_time = Column(DateTime, onupdate=func.current_timestamp())
     owner = Column(Integer, ForeignKey("user.key"), nullable=False)
     uuid = Column(String(36), unique=True, default=uuid.uuid4)
     state = Column(Enum(VideoProgress))

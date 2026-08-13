@@ -135,3 +135,19 @@ async def remove_video(
     await video_service.remove_video(video, user)
 
     return JSONResponse({"result": "ok"}, status_code=200)
+
+
+@video_router.get("/progress/{video_uuid}")
+async def get_video_state(
+    video_uuid: str,
+    video_service: VideoService = Depends(get_video_service),
+    user_service: UserService = Depends(get_user_service),
+    username: str = Depends(get_username),
+):
+    if username is None:
+        raise HTTPException(401, detail="Invalid Credential.")
+    user = await user_service.get_user_by_username(username)
+    video = await video_service.find_video_by_uuid(video_uuid, user)
+    await video_service.update_test(video)
+    state = await video_service.get_video_state(video)
+    return JSONResponse({"result": state}, status_code=200)

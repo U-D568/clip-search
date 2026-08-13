@@ -8,6 +8,7 @@ from .databases import (
     get_async_mariadb_connection,
     get_s3_client,
     get_async_qdrant_client,
+    get_redis_client
 )
 from app.db.repositories import (
     AsyncVideoRepository,
@@ -16,6 +17,7 @@ from app.db.repositories import (
     AsyncQdrantRepository,
 )
 from app.s3.repositories import S3Repositories
+from app.redis.repositories import RedisRepository
 
 
 async def get_async_video_repository(
@@ -46,3 +48,6 @@ async def get_async_qdrant_reposiroty(
 ) -> AsyncQdrantRepository:
     collection_name = os.environ["FRAME_COLLECTION"]
     return AsyncQdrantRepository(client, collection_name)
+
+async def get_redis_repository(client = Depends(get_redis_client)) -> RedisRepository:
+    return RedisRepository(client)

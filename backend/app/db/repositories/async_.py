@@ -8,10 +8,11 @@ from qdrant_client.models import (
     PointIdsList,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.models import BaseModel, User, Video, Frame, VideoProgress, RefreshToken
 from app.schema.dto import QdrantPoint
+from app import enums
 
 
 ### MariaDB ###
@@ -93,6 +94,9 @@ class AsyncVideoRepository(AsyncBaseRepository):
     async def delete(self, video: Video):
         await self.session.delete(video)
 
+    async def set_state(self, video_id: int, state: enums.VideoProgress):
+        stmt = update(Video).where(Video.key == video_id).values(state=state)
+        await self.session.execute(stmt)
 
 class AsyncVideoProgressRepository(AsyncBaseRepository):
     def __init__(self, session: AsyncSession):

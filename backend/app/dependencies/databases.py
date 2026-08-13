@@ -5,6 +5,7 @@ from app.db.connections import (
     AsyncQdrantConnection,
 )
 from app.s3.connections import S3Connection
+from app.redis.connections import RedisConnection
 
 
 def get_mariadb_connection():
@@ -23,3 +24,6 @@ def get_s3_client():
 
 def get_async_qdrant_client():
     return AsyncQdrantConnection.get_client()
+
+def get_redis_client():
+    return RedisConnection.get_client()

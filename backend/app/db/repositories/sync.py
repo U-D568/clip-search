@@ -13,7 +13,7 @@ from qdrant_client.models import (
 )
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.enums import FrameState
 from app.db.models import BaseModel, User, Video, Frame, VideoProgress, FrameProgress
@@ -59,6 +59,8 @@ class VideoRepository(BaseRepository):
         return results.first()
 
     def set_state(self, video_id: int, state: enums.VideoProgress):
+        # stmt = update(Video).where(Video.key == video_id).values(state=state)
+        # self.session.execute(stmt)
         video = self.session.query(Video).filter(Video.key == video_id).first()
         if video is not None:
             video.state = state
