@@ -6,7 +6,7 @@ from infra.db.connections import MariaDBConnection
 from infra.db.models import Frame
 from infra.s3.repositories import S3Repositories
 from infra.s3.connections import S3Connection
-from infra.redis.repositories import RedisRepository
+from infra.redis.repositories import VideoRedisRepository
 from infra.redis.connections import RedisConnection
 from utils.frames import frame_generator, batch_generator
 from utils.enums import VideoProgress
@@ -22,7 +22,7 @@ def frame_extractor(
     s3_client = S3Connection.get_client()
     s3_repo = S3Repositories(s3_client, os.environ["CLIP_BUCKET_NAME"])
     redis_client = RedisConnection.get_client()
-    redis_repo = RedisRepository(redis_client)
+    redis_repo = VideoRedisRepository(redis_client)
 
     video_url = s3_repo.get_url(video_path)
     frame_gen = frame_generator(video_url, interval, "jpg")
