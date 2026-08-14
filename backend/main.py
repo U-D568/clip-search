@@ -6,17 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import dotenv
 import uvicorn
 
-from app.routes.video import video_router
-from app.routes.auth import auth_router
-from app.db.connections import (
-    MariaDBConnection,
-    AsyncMariaDBConnection,
-    QdrantConnection,
-)
-from app.db.models import BaseModel, User
-from app.enums import UserRole
-from app.s3.connections import S3Connection
-from app.redis.connections import RedisConnection
+from routes.video import video_router
+from routes.auth import auth_router
+from infra.db.connections import MariaDBConnection, AsyncMariaDBConnection, QdrantConnection
+from infra.db.models import BaseModel, User
+from infra.s3.connections import S3Connection
+from infra.redis.connections import RedisConnection
 
 
 def create_app() -> FastAPI:

@@ -1,2 +1,0 @@
-class DuplicatedUserNameError(BaseException):
-    pass
