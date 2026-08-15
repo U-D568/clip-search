@@ -17,3 +17,9 @@ class RedisConnection:
         if cls._client is None:
             raise RuntimeError("Redis Client is not initialized")
         return cls._client
+
+    @classmethod
+    def close(cls):
+        if cls._client:
+            cls._client.close()
+            cls._client = None

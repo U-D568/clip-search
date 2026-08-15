@@ -44,6 +44,12 @@ class AsyncQdrantConnection:
             client.create_collection(col_name, vconfig)
 
     @classmethod
+    def close(cls):
+        if cls._client:
+            cls._client.close()
+            cls._client = None
+
+    @classmethod
     def get_client(cls):
         if cls._client is None:
             cls.init()

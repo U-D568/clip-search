@@ -33,6 +33,13 @@ class AsyncMariaDBConnection:
             )
 
     @classmethod
+    async def close(cls):
+        if cls._engine:
+            await cls._engine.dispose()
+            cls._engine = None
+            cls._session_factory = None
+
+    @classmethod
     def _get_engine(cls):
         if cls._engine is None:
             raise RuntimeError("Async MariaDB Connection is not initialized.")
