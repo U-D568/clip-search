@@ -41,6 +41,8 @@ def get_frame(video_path: str, timestamp: float):
 
 
 def frame_generator(video_path: str, interval: float, format: str = "jpg"):
+    # extracts the images from video with ffmpeg
+    # interval: interval time between extracted images
     FORMAT_MAP = {
         "jpg": {"codec": "mjpeg", "mime": "image/jpeg"},
         "png": {"codec": "png", "mime": "image/png"},
@@ -66,6 +68,7 @@ def frame_generator(video_path: str, interval: float, format: str = "jpg"):
         "-",  # print stdout
     ]
 
+    # subprocess
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -73,7 +76,7 @@ def frame_generator(video_path: str, interval: float, format: str = "jpg"):
         bufsize=512 * (1 << 20),  # 512 MiB
     )
 
-    buffer = b""
+    buffer = b"" # buffer to store image bytes
     timestamp = 0
     index = 0
     while True:

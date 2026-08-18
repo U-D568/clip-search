@@ -28,15 +28,16 @@ class QdrantPoint:
 
 
 @dataclass
-class FrameMeta:
-    video_id: int
-    frame_id: int
+class FrameMetadata:
+    video_key: int
+    frame_key: int
     timestamp: float
     index: int
 
     def to_dict(self):
         return {
-            "video_id": self.video_id,
+            "video_key": self.video_key,
+            "frame_key": self.frame_key,
             "timestamp": self.timestamp,
             "index": self.index,
         }

@@ -62,7 +62,7 @@ class VideoService:
             await self.video_repo.rollback()
             raise Exception(err)
 
-        frame_extractor.delay(s3_key, new_video.key)
+        frame_extractor.delay(new_video.key)
 
     async def find_video(self, video_title: str, user: User) -> Video:
         video = await self.video_repo.find_by_title(video_title, user.key)

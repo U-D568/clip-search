@@ -26,17 +26,17 @@ class VideoRedisRepository:
         key = self._hkey(uuid)
         self.client.hincrby(key, "extracted", value)
 
-    def get_extracted(self, uuid: str):
+    def get_extracted(self, uuid: str) -> int:
         key = self._hkey(uuid)
-        return self.client.hget(key, "extracted")
+        return int(self.client.hget(key, "extracted"))
 
     def add_processed(self, uuid: str, value: int):
         key = self._hkey(uuid)
         self.client.hincrby(key, "processed", value)
 
-    def get_processed(self, uuid: str):
+    def get_processed(self, uuid: str) -> int:
         key = self._hkey(uuid)
-        return self.client.hget(key, "processed")
+        return int(self.client.hget(key, "processed"))
 
     def set_state(self, uuid: str, state: VideoProgress):
         key = self._hkey(uuid)

@@ -12,6 +12,7 @@ from infra.db.connections import MariaDBConnection, AsyncMariaDBConnection, Qdra
 from infra.db.models import BaseModel, User
 from infra.s3.connections import S3Connection
 from infra.redis.connections import RedisConnection
+from utils.logging_config import init_logger
 
 
 def create_app() -> FastAPI:
@@ -62,6 +63,9 @@ def on_init():
 
     # Redis
     RedisConnection.init()
+
+    # logger
+    init_logger("backend.log")
 
 
 def on_exit():

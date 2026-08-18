@@ -53,13 +53,17 @@ class AsyncMariaDBConnection:
 
     @classmethod
     @asynccontextmanager
-    async def get_session(cls) -> AsyncGenerator[AsyncSession, None]:
+    async def get_session_context(cls) -> AsyncGenerator[AsyncSession, None]:
         session_factory = cls._get_session_factory()
         async with session_factory() as session:
             try:
                 yield session
             finally:
                 await session.close()
+
+    def get_session(cls) -> AsyncSession:
+        session_factory = cls._get_session_factory()
+        return session_factory()
 
 
 # sync db configuration

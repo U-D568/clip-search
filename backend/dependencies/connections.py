@@ -10,7 +10,7 @@ def get_mariadb_connection():
 
 
 async def get_async_mariadb_connection():
-    async with AsyncMariaDBConnection.get_session() as session:
+    async with AsyncMariaDBConnection.get_session_context() as session:
         yield session
 
 
