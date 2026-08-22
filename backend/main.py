@@ -8,7 +8,7 @@ import uvicorn
 
 from routes.video import video_router
 from routes.auth import auth_router
-from infra.db.connections import MariaDBConnection, AsyncMariaDBConnection, QdrantConnection
+from infra.db.connections import MariaDBConnection, AsyncMariaDBConnection
 from infra.db.models import BaseModel, User
 from infra.s3.connections import S3Connection
 from infra.redis.connections import RedisConnection
@@ -69,6 +69,9 @@ def on_init():
 
 
 def on_exit():
+    AsyncMariaDBConnection.close()
+    S3Connection.close()
+    RedisConnection.close()
     pass
 
 

@@ -36,6 +36,9 @@ def frame_extractor(
     video = event_loop.run_until_complete(video_repo.find_by_id(video_key)) # video orm
     video_url = s3_repo.get_url(video.file_path)
 
+    # publish message video is queued
+    redis_repo.publish_state(video.uuid, VideoProgress.IN_PROGRESS)
+
     # frame extraction
     frame_gen = frame_generator(video_url, frame_interval, "jpg")
 

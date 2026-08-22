@@ -1,48 +1,65 @@
-from typing import List
+from typing import List, AsyncGenerator
 
-from celery.result import AsyncResult
 from starlette.concurrency import run_in_threadpool
 import numpy as np
 import torch
 
 from ai.models.clip import get_device
-from backend.ai.models.encoder import (
+from ai.models.encoder import (
     text_encoding,
     text_projection,
     image_embedding,
     image_projection,
 )
 from ai.utils.ops import cosine_similarity
-from infra.db.models import Video, User
 from workers.text_embedder import text_embedding
-from infra.redis.connections import RedisConnection
-from infra.redis.repositories import QueryRedisRepository
+from infra.db.repositories import AsyncVideoRepository, AsyncUserRepository
+from infra.redis.repositories import AsyncQueryReidsRepository
 from utils.exceptions import AuthenticationException
+from utils.enums import QueryProgress
 
 
 class CLIPService:
-    def __init__(self, redis_repo: QueryRedisRepository):
-        self.redis_repo = redis_repo
+    def __init__(
+        self,
+        user_repo: AsyncUserRepository,
+        video_repo: AsyncVideoRepository,
+        query_repo: AsyncQueryReidsRepository,
+    ):
+        self.user_repo = user_repo
+        self.video_repo = video_repo
+        self.query_repo = query_repo
 
-    async def query_frame(self, query_text: str, video: Video, user: User):
+    async def query_frame(self, video_uuid: str, query_text: str, username: str) -> str:
+        user = await self.user_repo.get_by_username(username)
+        video = await self.video_repo.find_by_uuid(video_uuid, user.key)
+
+        # register task info to redis
+        task_id = await self.query_repo.register_query(video.uuid, user.uuid)
+
         # start embedding task
-        task = text_embedding.delay(query_text, video.key)
+        text_embedding.delay(query_text, video.key)
 
-        # add to redis
-        self.redis_repo.register_task(task.id, user.uuid)
-        return task.id
+        return task_id
 
-    async def get_query_result(self, task_id: str, user: User) -> List[str]:
-        # validate task ownership
-        owner_uuid = self.redis_repo.get_task_owner(task_id)
-        if owner_uuid != user.uuid:
+    async def get_query_result(
+        self, task_uuid: str, username: str
+    ) -> AsyncGenerator[List[int], None]:
+        user = await self.user_repo.get_by_username(username)
+        query = await self.query_repo.get_query(task_uuid)
+        if query.owner != user.uuid:
             raise AuthenticationException()
 
-        # retrieve the result of text embedding task
-        task = AsyncResult(task_id)
-        timestamps = await run_in_threadpool(task.get)
+        if query.state == QueryProgress.COMPLETE:
+            ids = await self.query_repo.get_ids(task_uuid)
+            yield ids
+            return
 
-        return timestamps
+        async for state in self.query_repo.subscribe():
+            if state == QueryProgress.COMPLETE:
+                break
+
+        return await self.query_repo.get_ids(task_uuid)
 
 
 class CLIPServiceLegacy:

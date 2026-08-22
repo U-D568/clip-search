@@ -3,7 +3,7 @@ from typing import List
 
 from ai.models.clip import load_clip_processor, get_device, load_clip_text_model
 from infra.qdrant.repositories import AsyncQdrantRepository
-from backend.ai.models.encoder import text_encoding, text_projection
+from ai.models.encoder import text_encoding, text_projection
 from workers.worker import celery_app
 
 

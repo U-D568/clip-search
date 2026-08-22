@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, AsyncGenerator
 
 from fastapi import UploadFile
 from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -17,21 +17,23 @@ from utils.exceptions import (
     InvalidCredentialsException,
 )
 from utils.enums import VideoProgress
-from infra.redis.repositories import VideoRedisRepository
+from infra.redis.repositories import VideoRedisRepository, AsyncRedisVideoRepository
 
 
 class VideoService:
     def __init__(
         self,
-        video_repo: AsyncVideoRepository,
+        video_repo: AsyncRedisVideoRepository,
         s3_repo: S3Repositories,
         qdrant_repo: AsyncQdrantRepository,
-        redis_repo: VideoRedisRepository
+        redis_repo: VideoRedisRepository,
+        async_redis_repo: AsyncRedisVideoRepository
     ):
         self.video_repo = video_repo
         self.s3_repo = s3_repo
         self.qdrant_repo = qdrant_repo
         self.redis_repo = redis_repo
+        self.async_redis_repo = async_redis_repo
 
     async def register_video(self, file: UploadFile, title: str, user: User):
         # save to s3 storage
@@ -99,3 +101,12 @@ class VideoService:
         except Exception as err:
             await self.video_repo.rollback()
             raise Exception(err)
+
+    async def get_video_state(self, video: Video) -> AsyncGenerator[VideoProgress, None]:
+        if video.state == VideoProgress.COMPLETE:
+            yield video.state
+            return
+
+        generator = self.async_redis_repo.subscribe(video.uuid)
+        async for state in generator:
+            yield state

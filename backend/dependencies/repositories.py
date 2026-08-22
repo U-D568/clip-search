@@ -8,6 +8,7 @@ from .connections import (
     get_s3_client,
     get_async_qdrant_client,
     get_redis_client,
+    get_async_redis_client
 )
 from infra.db.repositories import (
     AsyncVideoRepository,
@@ -15,7 +16,7 @@ from infra.db.repositories import (
     AsyncRefreshTokenRepository,
 )
 from infra.qdrant.repositories import AsyncQdrantRepository
-from infra.redis.repositories import VideoRedisRepository, QueryRedisRepository
+from infra.redis.repositories import VideoRedisRepository, QueryRedisRepository, AsyncRedisVideoRepository
 from infra.s3.repositories import S3Repositories
 
 
@@ -53,6 +54,11 @@ async def get_redis_video_repository(
     client=Depends(get_redis_client),
 ) -> VideoRedisRepository:
     return VideoRedisRepository(client)
+
+async def get_async_redis_video_reposiroty(
+    client=Depends(get_async_redis_client)
+) -> AsyncRedisVideoRepository:
+    return AsyncRedisVideoRepository(client)
 
 
 async def get_redis_query_repository(

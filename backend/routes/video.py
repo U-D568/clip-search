@@ -1,21 +1,15 @@
-from fastapi import APIRouter, UploadFile, HTTPException, Depends, Form, WebSocket
+from fastapi import APIRouter, UploadFile, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from fastapi.sse import ServerSentEvent, EventSourceResponse
 
 from services.video import VideoService
 from services.user import UserService
-from services.clip import CLIPService
-from dependencies.services import (
-    get_video_service,
-    get_user_service,
-    get_clip_service,
-)
+from dependencies.services import get_video_service, get_user_service
 from utils.exceptions import (
     FileWriteException,
     DBWriteException,
     UserNotFoundException,
-    ResourceNotFoundException,
     DuplicatedVideoTitleException,
-    AuthenticationException,
 )
 from utils.jwt import get_username
 
@@ -25,7 +19,7 @@ video_router = APIRouter(prefix="/video", tags=["video"])
 @video_router.post("/upload")
 async def upload_video(
     file: UploadFile,
-    title: str = Form(...),
+    title: str,
     video_service: VideoService = Depends(get_video_service),
     user_service: UserService = Depends(get_user_service),
     username: str = Depends(get_username),
@@ -45,46 +39,6 @@ async def upload_video(
         raise HTTPException(500, detail=f"Failed to save a video {file.filename}")
 
     return JSONResponse({"file_name": file.filename, "result": "ok"}, status_code=200)
-
-
-@video_router.post("/query")
-async def query_frame(
-    query_text: str = Form(...),
-    video_uuid: str = Form(...),
-    clip_service: CLIPService = Depends(get_clip_service),
-    video_service: VideoService = Depends(get_video_service),
-    user_service: UserService = Depends(get_user_service),
-    username: str = Depends(get_username),
-):
-    try:
-        user = await user_service.get_user_by_username(username)
-        video = await video_service.find_video_by_uuid(video_uuid, user)
-        task_id = clip_service.query_frame(query_text, video, user)
-    except ResourceNotFoundException:
-        raise HTTPException(403, detail=f"Invalid Access")
-    except UserNotFoundException:
-        raise HTTPException(403, detail=f"Invalid Access")
-
-    return JSONResponse({"task_id": task_id, "result": "ok"}, status_code=200)
-
-
-@video_router.websocket("/query-result")
-async def receive_result_webhook(
-    websocket: WebSocket,
-    task_id: str = Form(...),
-    username: str = Depends(get_username),
-    user_service: UserService = Depends(get_user_service),
-    clip_service: CLIPService = Depends(get_clip_service),
-):
-    await websocket.accept()
-    try:
-        user = await user_service.get_user_by_username(username)
-        timestamps = await clip_service.get_query_result(task_id, user)
-        websocket.send_json({"timestamps": timestamps, "result": "ok"})
-    except AuthenticationException:
-        raise HTTPException(403, detail=f"Authentication Failed")
-    finally:
-        websocket.close()
 
 
 @video_router.get("/list")
@@ -131,7 +85,7 @@ async def remove_video(
     return JSONResponse({"result": "ok"}, status_code=200)
 
 
-@video_router.get("/progress/{video_uuid}")
+@video_router.get("/progress/{video_uuid}", response_class=EventSourceResponse)
 async def get_video_state(
     video_uuid: str,
     video_service: VideoService = Depends(get_video_service),
@@ -142,6 +96,5 @@ async def get_video_state(
         raise HTTPException(401, detail="Invalid Credential.")
     user = await user_service.get_user_by_username(username)
     video = await video_service.find_video_by_uuid(video_uuid, user)
-    await video_service.update_test(video)
-    state = await video_service.get_video_state(video)
-    return JSONResponse({"result": state}, status_code=200)
+    async for state in video_service.get_video_state(video):
+        yield ServerSentEvent(data=state)

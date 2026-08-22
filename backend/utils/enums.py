@@ -13,6 +13,11 @@ class VideoProgress(Enum):
     COMPLETE = "complete"
     ERROR = "error"
 
+class QueryProgress(Enum):
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETE = "complete"
+    ERROR = "error"
 
 class TokenType(Enum):
     ACCESS = "ACCESS"

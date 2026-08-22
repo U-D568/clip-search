@@ -4,6 +4,7 @@ from sqlalchemy import select, update
 
 from infra.db.models import BaseModel, User, Video, Frame, VideoProgress, RefreshToken
 from utils import enums
+from utils.exceptions import UserNotFoundException
 
 
 class AsyncBaseRepository:
@@ -22,15 +23,21 @@ class AsyncUserRepository(AsyncBaseRepository):
     def __init__(self, session: AsyncSession):
         super().__init__(User, session)
 
-    async def get_by_username(self, username: str) -> Optional[User]:
+    async def get_by_username(self, username: str) -> User:
         query = select(self.model).where(User.username == username)
-        res = await self.session.execute(query)
-        return res.scalars().first()
+        response = await self.session.execute(query)
+        result = response.scalars().first()
+        if result is None:
+            raise UserNotFoundException()
+        return result
 
     async def get_by_uuid(self, uuid: str) -> Optional[User]:
         query = select(self.model).where(User.uuid == uuid)
-        res = await self.session.execute(query)
-        return res.scalars().first()
+        response = await self.session.execute(query)
+        result = response.scalars().first()
+        if result is None:
+            raise UserNotFoundException()
+        return result
 
     def add(self, new_user: User):
         self.session.add(new_user)

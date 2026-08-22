@@ -18,7 +18,7 @@ from infra.s3.connections import S3Connection
 from infra.s3.repositories import S3Repositories
 from infra.redis.connections import RedisConnection
 from infra.redis.repositories import VideoRedisRepository
-from backend.ai.models.encoder import image_embedding, image_projection
+from ai.models.encoder import image_embedding, image_projection
 from schema.frame import FrameMetadata, QdrantPoint
 from utils.exceptions import CollectionNotFoundException
 from utils.frames import bytes_to_numpy

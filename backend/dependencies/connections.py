@@ -1,6 +1,6 @@
 from infra.db.connections import MariaDBConnection, AsyncMariaDBConnection
 from infra.s3.connections import S3Connection
-from infra.redis.connections import RedisConnection
+from infra.redis.connections import RedisConnection, AsyncRedisConnection
 from infra.qdrant.connections import AsyncQdrantConnection
 
 
@@ -24,3 +24,6 @@ def get_async_qdrant_client():
 
 def get_redis_client():
     return RedisConnection.get_client()
+
+def get_async_redis_client():
+    return AsyncRedisConnection.get_client()
