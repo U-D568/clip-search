@@ -15,6 +15,15 @@ spec:
       labels:
         app: text-embedder
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: device
+                    operator: In
+                    values:
+                      - gpu
       containers:
         - name: worker
           image: docker.io/library/clip-search:dev
