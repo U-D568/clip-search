@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Any
 
 import numpy as np
+from pydantic import BaseModel
 
 
 @dataclass
@@ -17,27 +18,14 @@ class BatchedFrames:
     frames: List[ExtractedFrame]
 
 
-@dataclass
-class QdrantPoint:
+class QdrantPoint(BaseModel):
     id: int
     vector: List[float]
-    payload: Optional[Any]
-
-    def to_dict(self):
-        return {"id": self.id, "vector": self.vector, "payload": self.payload}
+    metadata: "PointMetadata"
 
 
-@dataclass
-class FrameMetadata:
+class PointMetadata(BaseModel):
     video_key: int
     frame_key: int
     timestamp: float
     index: int
-
-    def to_dict(self):
-        return {
-            "video_key": self.video_key,
-            "frame_key": self.frame_key,
-            "timestamp": self.timestamp,
-            "index": self.index,
-        }

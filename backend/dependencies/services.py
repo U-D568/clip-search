@@ -7,14 +7,13 @@ from infra.db.repositories import (
 )
 from infra.qdrant.repositories import AsyncQdrantRepository
 from infra.s3.repositories import S3Repositories
-from infra.redis.repositories import VideoRedisRepository, AsyncRedisVideoRepository
+from infra.redis.repositories import AsyncRedisVideoRepository
 from .repositories import (
     get_async_video_repository,
     get_async_user_repository,
     get_async_refresh_token_repository,
     get_s3_repository,
     get_async_qdrant_reposiroty,
-    get_redis_video_repository,
     get_async_redis_video_reposiroty
 )
 from services.video import VideoService
@@ -24,13 +23,12 @@ from services.clip import CLIPService
 
 
 async def get_video_service(
-    repo: AsyncRedisVideoRepository = Depends(get_async_video_repository),
+    repo: AsyncVideoRepository = Depends(get_async_video_repository),
     s3_repo: S3Repositories = Depends(get_s3_repository),
     qdrant_repo: AsyncQdrantRepository = Depends(get_async_qdrant_reposiroty),
-    redis_repo: VideoRedisRepository = Depends(get_redis_video_repository),
-    async_redis_repo: AsyncRedisVideoRepository = Depends(get_async_redis_video_reposiroty)
+    redis_repo: AsyncRedisVideoRepository = Depends(get_async_redis_video_reposiroty),
 ) -> VideoService:
-    return VideoService(repo, s3_repo, qdrant_repo, redis_repo, async_redis_repo)
+    return VideoService(repo, s3_repo, qdrant_repo, redis_repo)
 
 
 async def get_auth_service(

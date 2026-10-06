@@ -3,37 +3,34 @@ from pathlib import Path
 from typing import List, AsyncGenerator
 
 from fastapi import UploadFile
-from qdrant_client.models import Filter, FieldCondition, MatchValue
 from sqlalchemy.exc import IntegrityError
 
 from infra.db.models import Video, User
 from infra.db.repositories import AsyncVideoRepository
 from infra.qdrant.repositories import AsyncQdrantRepository
 from infra.s3.repositories import S3Repositories
-from workers.frame_extractor import frame_extractor
+from workers.tasks.frame_extractor import frame_extractor
 from utils.exceptions import (
     ResourceNotFoundException,
     DuplicatedVideoTitleException,
     InvalidCredentialsException,
 )
 from utils.enums import VideoProgress
-from infra.redis.repositories import VideoRedisRepository, AsyncRedisVideoRepository
+from infra.redis.repositories import AsyncRedisVideoRepository
 
 
 class VideoService:
     def __init__(
         self,
-        video_repo: AsyncRedisVideoRepository,
+        video_repo: AsyncVideoRepository,
         s3_repo: S3Repositories,
         qdrant_repo: AsyncQdrantRepository,
-        redis_repo: VideoRedisRepository,
-        async_redis_repo: AsyncRedisVideoRepository
+        redis_repo: AsyncRedisVideoRepository,
     ):
         self.video_repo = video_repo
         self.s3_repo = s3_repo
         self.qdrant_repo = qdrant_repo
         self.redis_repo = redis_repo
-        self.async_redis_repo = async_redis_repo
 
     async def register_video(self, file: UploadFile, title: str, user: User):
         # save to s3 storage
@@ -91,22 +88,32 @@ class VideoService:
     async def remove_video(self, video: Video, user: User):
         if video.owner != user.key:
             raise InvalidCredentialsException()
+
         try:
+            redis_key = str(video.key)
+            await self.redis_repo.set_state(redis_key, VideoProgress.ABORTED)
+            await self.video_repo.set_state(video.key, VideoProgress.ABORTED)
+            await self.video_repo.commit()
+            await self.redis_repo.publish_state(redis_key, VideoProgress.ABORTED)
+
+            frame_uuids = await self.video_repo.find_frame_uuids_by_video_id(
+                video.key
+            )
+            await self.qdrant_repo.delete_by_key(video.key)
+            self.s3_repo.delete_video_files(video.file_path, frame_uuids)
             await self.video_repo.delete(video)
             await self.video_repo.commit()
-            qdrant_filter = Filter(
-                must=FieldCondition(key=video.key, match=MatchValue(value=video.key))
-            )
-            await self.qdrant_repo.delete(qdrant_filter)
-        except Exception as err:
+        except Exception:
             await self.video_repo.rollback()
-            raise Exception(err)
+            raise
 
     async def get_video_state(self, video: Video) -> AsyncGenerator[VideoProgress, None]:
         if video.state == VideoProgress.COMPLETE:
             yield video.state
             return
 
-        generator = self.async_redis_repo.subscribe(video.uuid)
+        redis_key = str(video.key)
+        generator = self.redis_repo.subscribe(redis_key)
         async for state in generator:
             yield state
+        await self.redis_repo.delete_progress(redis_key)

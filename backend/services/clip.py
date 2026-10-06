@@ -1,6 +1,5 @@
 from typing import List, AsyncGenerator
 
-from starlette.concurrency import run_in_threadpool
 import numpy as np
 import torch
 
@@ -15,7 +14,6 @@ from ai.utils.ops import cosine_similarity
 from workers.text_embedder import text_embedding
 from infra.db.repositories import AsyncVideoRepository, AsyncUserRepository
 from infra.redis.repositories import AsyncQueryReidsRepository
-from utils.exceptions import AuthenticationException
 from utils.enums import QueryProgress
 
 
@@ -30,26 +28,19 @@ class CLIPService:
         self.video_repo = video_repo
         self.query_repo = query_repo
 
-    async def query_frame(self, video_uuid: str, query_text: str, username: str) -> str:
+    async def query_frame(
+        self, video_uuid: str, query_text: str, username: str
+    ) -> AsyncGenerator[List[int], None]:
         user = await self.user_repo.get_by_username(username)
         video = await self.video_repo.find_by_uuid(video_uuid, user.key)
 
         # register task info to redis
-        task_id = await self.query_repo.register_query(video.uuid, user.uuid)
+        task_uuid = await self.query_repo.register_query(video.uuid, user.uuid)
 
         # start embedding task
-        text_embedding.delay(query_text, video.key)
+        text_embedding.delay(query_text, task_uuid)
 
-        return task_id
-
-    async def get_query_result(
-        self, task_uuid: str, username: str
-    ) -> AsyncGenerator[List[int], None]:
-        user = await self.user_repo.get_by_username(username)
         query = await self.query_repo.get_query(task_uuid)
-        if query.owner != user.uuid:
-            raise AuthenticationException()
-
         if query.state == QueryProgress.COMPLETE:
             ids = await self.query_repo.get_ids(task_uuid)
             yield ids
@@ -57,9 +48,8 @@ class CLIPService:
 
         async for state in self.query_repo.subscribe():
             if state == QueryProgress.COMPLETE:
+                yield await self.query_repo.get_ids(task_uuid)
                 break
-
-        return await self.query_repo.get_ids(task_uuid)
 
 
 class CLIPServiceLegacy:

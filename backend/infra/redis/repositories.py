@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, List
+from typing import AsyncGenerator, List, Optional
 from uuid import uuid4 as uuid
 
 import redis
@@ -7,121 +7,162 @@ import redis.asyncio as async_redis
 from infra.redis.schema import RedisQueryData
 from utils.enums import VideoProgress, QueryProgress
 
+class BaseVideoRepo:
+    def _hkey(self, key: str):
+        return f"video:{key}"
 
-class VideoRedisRepository:
+class VideoRedisRepository(BaseVideoRepo):
     def __init__(self, client: redis.Redis):
         self.client = client
 
-    def _hkey(self, uuid: str):
-        return f"video-{uuid}"
-
-    def init_progress(self, uuid: str):
-        name = self._hkey(uuid)
+    def init_progress(self, key: str):
+        name = self._hkey(key)
         self.client.hset(
             name,
             mapping={
                 "tasks": 0,
                 "processed": 0,
-                "state": VideoProgress.IN_PROGRESS.value,
             },
         )
+        self.client.hsetnx(name, "state", VideoProgress.IN_PROGRESS.value)
         self.client.expire(name, 3600 * 3)
 
-    def add_extracted(self, uuid: str, value: int):
-        key = self._hkey(uuid)
-        self.client.hincrby(key, "extracted", value)
+    def add_extracted(self, key: str, value: int):
+        redis_key = self._hkey(key)
+        self.client.hincrby(redis_key, "extracted", value)
 
-    def get_extracted(self, uuid: str) -> int:
-        key = self._hkey(uuid)
-        return int(self.client.hget(key, "extracted"))
+    def get_extracted(self, key: str) -> int:
+        redis_key = self._hkey(key)
+        return int(self.client.hget(redis_key, "extracted"))
 
-    def add_processed(self, uuid: str, value: int):
-        key = self._hkey(uuid)
-        self.client.hincrby(key, "processed", value)
+    def add_processed(self, key: str, value: int):
+        redis_key = self._hkey(key)
+        self.client.hincrby(redis_key, "processed", value)
 
-    def get_processed(self, uuid: str) -> int:
-        key = self._hkey(uuid)
-        return int(self.client.hget(key, "processed"))
+    def get_processed(self, key: str) -> int:
+        redis_key = self._hkey(key)
+        return int(self.client.hget(redis_key, "processed"))
 
-    def set_state(self, uuid: str, state: VideoProgress):
-        key = self._hkey(uuid)
-        self.client.hset(key, "state", state.value)
+    def set_state(self, key: str, state: VideoProgress):
+        redis_key = self._hkey(key)
+        self.client.hset(redis_key, "state", state.value)
+        self.client.expire(redis_key, 3600 * 3)
 
-    def get_state(self, uuid: str) -> VideoProgress:
-        key = self._hkey(uuid)
-        state = self.client.hget(key, "state")
-        return VideoProgress(state)
+    def get_state(self, key: str) -> Optional[VideoProgress]:
+        redis_key = self._hkey(key)
+        state = self.client.hget(redis_key, "state")
+        return VideoProgress(state) if state is not None else None
 
-    def publish_state(self, uuid: str, state: VideoProgress):
-        channel = self._hkey(uuid)
+    def set_state_if_not_aborted(self, key: str, state: VideoProgress) -> bool:
+        redis_key = self._hkey(key)
+        script = """
+        local current = redis.call('HGET', KEYS[1], 'state')
+        if not current or current == ARGV[1] then
+            return 0
+        end
+        redis.call('HSET', KEYS[1], 'state', ARGV[2])
+        redis.call('EXPIRE', KEYS[1], ARGV[3])
+        return 1
+        """
+        updated = self.client.eval(
+            script,
+            1,
+            redis_key,
+            VideoProgress.ABORTED.value,
+            state.value,
+            3600 * 3,
+        )
+        return bool(updated)
+
+    def publish_state(self, key: str, state: VideoProgress):
+        channel = self._hkey(key)
         self.client.publish(channel, state.value)
 
 
-class AsyncRedisVideoRepository:
+class AsyncRedisVideoRepository(BaseVideoRepo):
     def __init__(self, client: async_redis.Redis):
         self.client = client
 
-    def _hkey(self, uuid: str):
-        return f"video-{uuid}"
+    async def set_state(self, key: str, state: VideoProgress):
+        redis_key = self._hkey(key)
+        await self.client.hset(redis_key, "state", state.value)
+        await self.client.expire(redis_key, 3600 * 3)
 
-    async def subscribe(self, uuid: str) -> AsyncGenerator[VideoProgress, None]:
-        key = self._hkey(uuid)
+    async def publish_state(self, key: str, state: VideoProgress):
+        await self.client.publish(self._hkey(key), state.value)
 
-        current_state = await self.client.hget(key, "processed")
+    async def delete_progress(self, key: str):
+        redis_key = self._hkey(key)
+        await self.client.delete(redis_key)
+
+    async def subscribe(self, key: str) -> AsyncGenerator[VideoProgress, None]:
+        redis_key = self._hkey(key)
+
+        current_state = await self.client.hget(redis_key, "state")
         if current_state is None:
             return  # raise exception here
 
         current_state = VideoProgress(current_state)
-        if current_state == VideoProgress.COMPLETE:
+        if current_state in {
+            VideoProgress.COMPLETE,
+            VideoProgress.ABORTED,
+            VideoProgress.ERROR,
+        }:
             yield current_state
             return
 
         pubsub = self.client.pubsub()
         try:
-            await pubsub.subscribe(key)
+            await pubsub.subscribe(redis_key)
             async for message in pubsub.listen():
                 if message["type"] != "message":
                     continue
                 state = VideoProgress(message["data"])
-                if state == VideoProgress.COMPLETE:
+                if state in {
+                    VideoProgress.COMPLETE,
+                    VideoProgress.ABORTED,
+                    VideoProgress.ERROR,
+                }:
                     yield state
                     break
                 yield state
         finally:
-            pubsub.unsubscribe()
-            pubsub.close()
+            await pubsub.unsubscribe(redis_key)
+            await pubsub.aclose()
 
 
-class BaseQueryRedisRepository:
-    # hash's key
+class BaseQueryRepo:
+    # hash key
     def _hkey(self, uuid: str):
-        return f"query-{uuid}"
+        return f"query:{uuid}"
 
-    # list's key
+    # list key
     def _lkey(self, uuid: str):
-        return f"query-list-{uuid}"
+        return f"response:{uuid}"
 
     def _init_state(self, user_uuid: str, video_uuid: str) -> RedisQueryData:
         return RedisQueryData(video_uuid, user_uuid, QueryProgress.QUEUED.value)
 
 
-class QueryRedisRepository(BaseQueryRedisRepository):
+class QueryRedisRepository(BaseQueryRepo):
     def __init__(self, client: redis.Redis):
         self.client = client
 
-    def register_query(self, video_uuid: str, user_uuid: str):
-        name = self._hkey(video_uuid)
-        self.client.hset(
-            name, mapping=self._init_state(user_uuid, video_uuid).model_dump()
-        )
-        self.client.expire(name, 600)
+    def set_state(self, task_uuid: str, state: QueryProgress):
+        hkey = self._hkey(task_uuid)
+        self.client.hset(hkey, value=state.value)
 
-    def get_task_owner(self, task_id: str) -> str:
-        key = self._hkey(task_id)
-        return self.client.get(key)
+    def publish(self, task_uuid: str, state: QueryProgress):
+        channel = self._hkey(task_uuid)
+        self.client.publish(channel, state.value)
+
+    def get_query(self, task_uuid: str) -> RedisQueryData:
+        name = self._hkey(task_uuid)
+        obj = self.client.hgetall(name)
+        return RedisQueryData(obj["video"], obj["owner"], QueryProgress(obj["state"]))
 
 
-class AsyncQueryReidsRepository(BaseQueryRedisRepository):
+class AsyncQueryReidsRepository(BaseQueryRepo):
     def __init__(self, client: async_redis.Redis):
         self.client = client
 

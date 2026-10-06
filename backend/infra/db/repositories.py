@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from infra.db.models import BaseModel, User, Video, Frame, VideoProgress, RefreshToken
 from utils import enums
@@ -68,6 +68,11 @@ class AsyncVideoRepository(AsyncBaseRepository):
         res = await self.session.execute(query)
         return res.scalars().first()
 
+    async def get_state_by_id(self, video_id: int) -> Optional[enums.VideoProgress]:
+        query = select(Video.state).where(Video.key == video_id)
+        res = await self.session.execute(query)
+        return res.scalar_one_or_none()
+
     async def find_by_title(self, video_title: str, user_id: int) -> Optional[Video]:
         query = select(self.model).where(
             Video.owner == user_id, Video.title == video_title
@@ -84,7 +89,15 @@ class AsyncVideoRepository(AsyncBaseRepository):
         return video
 
     async def find_all_by_user_id(self, user_id: int) -> List[Video]:
-        query = select(self.model).where(Video.owner == user_id)
+        query = select(self.model).where(
+            Video.owner == user_id,
+            Video.state != enums.VideoProgress.ABORTED,
+        )
+        res = await self.session.execute(query)
+        return list(res.scalars().all())
+
+    async def find_frame_uuids_by_video_id(self, video_id: int) -> List[str]:
+        query = select(Frame.uuid).where(Frame.video_key == video_id)
         res = await self.session.execute(query)
         return list(res.scalars().all())
 
@@ -94,6 +107,21 @@ class AsyncVideoRepository(AsyncBaseRepository):
     async def set_state(self, video_id: int, state: enums.VideoProgress):
         stmt = update(Video).where(Video.key == video_id).values(state=state)
         await self.session.execute(stmt)
+
+    # Set the state of the video to the given state if it is not already aborted.
+    async def set_state_if_not_aborted(
+        self, video_id: int, state: enums.VideoProgress
+    ) -> bool:
+        stmt = (
+            update(Video)
+            .where(
+                Video.key == video_id,
+                Video.state != enums.VideoProgress.ABORTED,
+            )
+            .values(state=state)
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount == 1
 
 class AsyncVideoProgressRepository(AsyncBaseRepository):
     def __init__(self, session: AsyncSession):
@@ -117,3 +145,7 @@ class AsyncFrameRepository(AsyncBaseRepository):
         query = select(Frame).where(Frame.key.in_(ids))
         res = await self.session.execute(query)
         return res.scalars().all()
+
+    async def delete_by_ids(self, ids: List[int]):
+        if ids:
+            await self.session.execute(delete(Frame).where(Frame.key.in_(ids)))

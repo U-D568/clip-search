@@ -5,14 +5,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import VideoSidebar from '../pages/VideoSidebar';
 import { getVideos } from '../api/video';
-
-interface LocalVideoMeta {
-  uuid: string;
-  title: string;
-  state: 'queued' | 'processing' | 'complete' | 'error';
-  uploaded_time: string;
-  fileName: string;
-}
+import type { LocalVideoMeta } from '../types/video';
 
 export interface DashboardContextType {
   videos: LocalVideoMeta[];

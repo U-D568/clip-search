@@ -11,6 +11,7 @@ class VideoProgress(Enum):
     IN_PROGRESS = "in_progress"
     FRAME_COMPLETE = "f_complete"
     COMPLETE = "complete"
+    ABORTED = "aborted"
     ERROR = "error"
 
 class QueryProgress(Enum):

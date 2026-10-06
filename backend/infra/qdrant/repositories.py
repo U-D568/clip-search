@@ -6,6 +6,8 @@ from qdrant_client.models import (
     Distance,
     Filter,
     PointIdsList,
+    FieldCondition,
+    MatchValue
 )
 
 from schema.frame import QdrantPoint
@@ -36,19 +38,36 @@ class AsyncQdrantRepository:
         selector = PointIdsList(points=ids)
         return await self.client.delete(self.collection_name, points_selector=selector)
 
-    async def search_by_id(self, id=Union[str, int]):
+    async def get_by_id(self, id=Union[str, int]):
         return await self.client.query_points(self.collection_name, query=id)
 
-    async def search(
+    async def query_video(
         self,
         query_vector: Optional[List[float]],
-        filter: Filter,
+        video_key: int,
+        topk=5
     ):
+        query_filter = Filter(must=[
+            FieldCondition(key="video_key", match=MatchValue(value=video_key))
+        ])
+
         return await self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
-            query_filter=filter,
+            query_filter=query_filter,
+            limit=topk
         )
 
-    async def delete(self, filter: Filter):
-        return await self.client.delete(self.collection_name, points_selector=filter)
+    async def delete_by_key(self, video_key: int):
+        selector = Filter(
+            must=[
+                FieldCondition(
+                    key="video_key",
+                    match=MatchValue(value=video_key),
+                )
+            ]
+        )
+        return await self.client.delete(
+            self.collection_name,
+            points_selector=selector,
+        )

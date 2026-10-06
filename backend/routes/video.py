@@ -10,6 +10,8 @@ from utils.exceptions import (
     DBWriteException,
     UserNotFoundException,
     DuplicatedVideoTitleException,
+    InvalidCredentialsException,
+    ResourceNotFoundException,
 )
 from utils.jwt import get_username
 
@@ -78,9 +80,16 @@ async def remove_video(
     if username is None:
         raise HTTPException(401, detail="Invalid Credential.")
 
-    user = await user_service.get_user_by_username(username)
-    video = await video_service.find_video_by_uuid(video_uuid, user)
-    await video_service.remove_video(video, user)
+    try:
+        user = await user_service.get_user_by_username(username)
+        video = await video_service.find_video_by_uuid(video_uuid, user)
+        await video_service.remove_video(video, user)
+    except UserNotFoundException:
+        raise HTTPException(401, detail=f"Unknown username: {username}")
+    except ResourceNotFoundException:
+        raise HTTPException(404, detail="Video not found.")
+    except InvalidCredentialsException:
+        raise HTTPException(403, detail="You do not own this video.")
 
     return JSONResponse({"result": "ok"}, status_code=200)
 

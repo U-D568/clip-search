@@ -5,7 +5,7 @@ from celery import Celery
 from celery.signals import worker_process_init, worker_process_shutdown
 import dotenv
 
-from ai.models.clip import load_clip_vision_model, load_clip_processor
+from ai.models.clip import load_clip_vision_model, load_clip_processor, load_clip_text_model
 from infra.db.connections import AsyncMariaDBConnection
 from infra.qdrant.connections import AsyncQdrantConnection
 from infra.s3.connections import S3Connection
@@ -25,8 +25,11 @@ def on_init(sender: Celery, **kargs):
     event_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(event_loop)
 
-    if worker_type == "GPU":
+    if worker_type == "FRAME_EMBEDDING":
         load_clip_vision_model()
+        load_clip_processor()
+    elif worker_type == "TEXT_EMBEDDING":
+        load_clip_text_model()
         load_clip_processor()
 
 
@@ -51,8 +54,8 @@ celery_app = Celery(
 
 celery_app.conf.update(
     imports=[
-        "workers.workers.frame_extractor",
-        "workers.workers.image_embedder",
-        "workers.workers.text_embedder",
+        "workers.tasks.frame_extractor",
+        "workers.tasks.image_embedder",
+        "workers.text_embedder",
     ]
 )
