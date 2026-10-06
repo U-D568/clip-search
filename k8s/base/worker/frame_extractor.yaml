@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frame-extractor
+  namespace: clip-search
+  labels:
+    app: frame-extractor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frame-extractor
+  template:
+    metadata:
+      labels:
+        app: frame-extractor
+    spec:
+      containers:
+        - name: worker
+          image: docker.io/library/clip-search:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WORKER_TYPE
+              value: CPU
+            - name: BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: config
+                  key: BROKER_URL
+            - name: MARIADB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: config
+                  key: MARIADB_URL
+          command:
+            - celery
+            - -A
+            - workers.woker.celery_app
+            - worker
+            - -Q
+            - extraction_queue
+            - --concurrency=4
+            - --loglevel=info
+          volumeMounts:
+            - name: test
+              mountPath: /app
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 2Gi
+      volumes:
+        - name: test
+          hostPath:
+            path: /home/d568/develop/clip-search/backend

@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+  namespace: clip-search
+data:
+  # CLIP Model
+  EMBEDDING_DIMS: "512"
+  PRETRAINED_MODEL: "openai/clip-vit-base-patch32"
+  MODEL_CACHE_DIR: ".cache/models"
+
+  # Qdrant Config
+  QDRANT_IP: "qdrant-0.qdrant-service.clip-search.svc.cluster.local"
+  QDRANT_PORT: "6333"
+  FRAME_COLLECTION: "Frame"
+  VIDEO_KEY: "video_key"
+  DEMENSION: "512"
+
+  # Redis
+  REDIS_URL: "redis-service.clip-search.svc.cluster.local"
+
+  # Celery
+  BROKER_URL: "redis://redis-service.clip-search.svc.cluster.local:6379/0"
+
+  # MariaDB
+  MARIADB_URL: "mariadb-0.mariadb-service.clip-search.svc.cluster.local"
+  MARIADB_PORT: "3306"
+  MARIADB_DATABASE: CLIP
+
+  # JWT Configuration
+  HASH_ALGO: HS256
+  ACCESS_TOKEN_EXPIRE: "900"
+  REFRESH_TOKEN_EXPIRE: "1296000"
+
+  # S3
+  CLIP_BUCKET_NAME: "clip-search"
+  FRAME_STORAGE_PATH: "s3://clip-search/frames/"
+
+  # OS Environments
+  TZ: Asia/Seoul

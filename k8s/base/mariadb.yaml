@@ -1,0 +1,67 @@
+# Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: clip-search
+  name: mariadb-service
+  labels:
+    app: mariadb
+spec:
+  ports:
+    - port: 3306
+      name: mariadb-port
+  clusterIP: None
+  selector:
+    app: mariadb
+# Statefulset
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: clip-search
+  name: mariadb
+spec:
+  serviceName: mariadb-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+        - name: mariadb
+          image: mariadb
+          ports:
+            - containerPort: 3306
+              name: mariadb-port
+          volumeMounts:
+            - name: datadir
+              mountPath: /var/lib/mysql/
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secret
+                  key: MARIADB_ROOT_PASSWORD
+            - name: MARIADB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: secret
+                  key: MARIADB_USER
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secret
+                  key: MARIADB_PASSWORD
+            - name: MARIADB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: config
+                  key: MARIADB_DATABASE
+      volumes:
+        - name: datadir
+          hostPath:
+            path: /home/d568/develop/clip-search/backend/storages/mariadb

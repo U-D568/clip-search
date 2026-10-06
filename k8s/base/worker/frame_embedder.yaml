@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frame-embedder
+  namespace: clip-search
+  labels:
+    app: frame-embedder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frame-embedder
+  template:
+    metadata:
+      labels:
+        app: frame-embedder
+    spec:
+      containers:
+        - name: worker
+          image: docker.io/library/clip-search:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WORKER_TYPE
+              value: GPU
+            - name: BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: config
+                  key: BROKER_URL
+            - name: MARIADB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: config
+                  key: MARIADB_URL
+            - name: QDRANT_IP
+              valueFrom:
+                configMapKeyRef:
+                  name: config
+                  key: QDRANT_IP
+          command:
+            - celery
+            - -A
+            - workers.worker.celery_app
+            - worker
+            - -Q
+            - embedding_queue
+            - --concurrency=1
+            - --loglevel=info
+          volumeMounts:
+            - name: test
+              mountPath: /app
+          resources:
+            requests:
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: test
+          hostPath:
+            path: /home/d568/develop/clip-search/backend

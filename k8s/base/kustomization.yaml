@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - worker/frame_embedder.yaml
+  - worker/frame_extractor.yaml
+  - worker/text_embedder.yaml
+  - config.yaml
+  - mariadb.yaml
+  - qdrant.yaml
+  - redis.yaml
+  - secret.yaml

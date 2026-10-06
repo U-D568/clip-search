@@ -235,7 +235,7 @@ pyrightconfig.json
 .venv
 .cache
 .vscode
-k8s
+k8s/base/secret.yaml
 .agent
 
 ### Backend ###
