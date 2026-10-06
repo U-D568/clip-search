@@ -11,10 +11,11 @@ from ai.models.encoder import (
     image_projection,
 )
 from ai.utils.ops import cosine_similarity
-from workers.text_embedder import text_embedding
 from infra.db.repositories import AsyncVideoRepository, AsyncUserRepository
 from infra.redis.repositories import AsyncQueryReidsRepository
 from utils.enums import QueryProgress
+from utils.exceptions import ResourceNotFoundException
+from workers.tasks.text_embedder import text_embedding
 
 
 class CLIPService:
@@ -33,9 +34,11 @@ class CLIPService:
     ) -> AsyncGenerator[List[int], None]:
         user = await self.user_repo.get_by_username(username)
         video = await self.video_repo.find_by_uuid(video_uuid, user.key)
+        if video is None:
+            raise ResourceNotFoundException()
 
         # register task info to redis
-        task_uuid = await self.query_repo.register_query(video.uuid, user.uuid)
+        task_uuid = await self.query_repo.register_query(video.key, user.key)
 
         # start embedding task
         text_embedding.delay(query_text, task_uuid)
@@ -46,10 +49,12 @@ class CLIPService:
             yield ids
             return
 
-        async for state in self.query_repo.subscribe():
+        async for state in self.query_repo.subscribe(task_uuid):
             if state == QueryProgress.COMPLETE:
                 yield await self.query_repo.get_ids(task_uuid)
                 break
+            if state == QueryProgress.ERROR:
+                raise RuntimeError(f"Text embedding query {task_uuid} failed")
 
 
 class CLIPServiceLegacy:

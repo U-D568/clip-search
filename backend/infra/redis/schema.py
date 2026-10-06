@@ -4,6 +4,6 @@ from utils.enums import QueryProgress
 
 
 class RedisQueryData(BaseModel):
-    video: str # video uuid
-    owner: str # user uuid
+    video_key: int
+    owner_key: int
     state: QueryProgress = QueryProgress.QUEUED

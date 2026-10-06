@@ -56,6 +56,6 @@ celery_app.conf.update(
     imports=[
         "workers.tasks.frame_extractor",
         "workers.tasks.image_embedder",
-        "workers.text_embedder",
+        "workers.tasks.text_embedder",
     ]
 )

@@ -7,9 +7,11 @@ import redis.asyncio as async_redis
 from infra.redis.schema import RedisQueryData
 from utils.enums import VideoProgress, QueryProgress
 
+
 class BaseVideoRepo:
     def _hkey(self, key: str):
         return f"video:{key}"
+
 
 class VideoRedisRepository(BaseVideoRepo):
     def __init__(self, client: redis.Redis):
@@ -140,8 +142,10 @@ class BaseQueryRepo:
     def _lkey(self, uuid: str):
         return f"response:{uuid}"
 
-    def _init_state(self, user_uuid: str, video_uuid: str) -> RedisQueryData:
-        return RedisQueryData(video_uuid, user_uuid, QueryProgress.QUEUED.value)
+    def _init_state(self, owner_key: int, video_key: int) -> RedisQueryData:
+        return RedisQueryData(
+            video_key=video_key, owner_key=owner_key, state=QueryProgress.QUEUED.value
+        )
 
 
 class QueryRedisRepository(BaseQueryRepo):
@@ -150,7 +154,8 @@ class QueryRedisRepository(BaseQueryRepo):
 
     def set_state(self, task_uuid: str, state: QueryProgress):
         hkey = self._hkey(task_uuid)
-        self.client.hset(hkey, value=state.value)
+        self.client.hset(hkey, mapping={"state": state.value})
+        self.client.expire(hkey, 600)
 
     def publish(self, task_uuid: str, state: QueryProgress):
         channel = self._hkey(task_uuid)
@@ -159,24 +164,31 @@ class QueryRedisRepository(BaseQueryRepo):
     def get_query(self, task_uuid: str) -> RedisQueryData:
         name = self._hkey(task_uuid)
         obj = self.client.hgetall(name)
-        return RedisQueryData(obj["video"], obj["owner"], QueryProgress(obj["state"]))
+        return RedisQueryData.model_validate(obj)
+
+    def set_ids(self, task_uuid: str, ids: List[int]) -> None:
+        list_key = self._lkey(task_uuid)
+        self.client.delete(list_key)
+        if ids:
+            self.client.rpush(list_key, *ids)
+        self.client.expire(list_key, 600)
 
 
 class AsyncQueryReidsRepository(BaseQueryRepo):
     def __init__(self, client: async_redis.Redis):
         self.client = client
 
-    async def register_query(self, video_uuid: str, user_uuid: str) -> str:
+    async def register_query(self, video_key: int, owner_key: int) -> str:
         task_uuid = uuid()
         name = self._hkey(task_uuid)
-        await self.client.hset(name, mapping=self._init_state(user_uuid, video_uuid))
+        await self.client.hset(name, mapping=self._init_state(owner_key, video_key).model_dump())
         await self.client.expire(name, 600)
         return task_uuid
 
     async def get_query(self, task_uuid: str) -> RedisQueryData:
         name = self._hkey(task_uuid)
         obj = await self.client.hgetall(name)
-        return RedisQueryData(obj["video"], obj["owner"], QueryProgress(obj["state"]))
+        return RedisQueryData.model_validate(obj)
 
     async def get_ids(self, task_uuid: str) -> List[int]:
         list_key = self._lkey(task_uuid)
@@ -189,14 +201,21 @@ class AsyncQueryReidsRepository(BaseQueryRepo):
         pubsub = self.client.pubsub()
         try:
             await pubsub.subscribe(key)
+            current_state = await self.client.hget(key, "state")
+            if current_state is not None:
+                state = QueryProgress(current_state)
+                if state in {QueryProgress.COMPLETE, QueryProgress.ERROR}:
+                    yield state
+                    return
+
             async for message in pubsub.listen():
                 if message["type"] != "message":
                     continue
                 state = QueryProgress(message["data"])
-                if state == QueryProgress.COMPLETE:
+                if state in {QueryProgress.COMPLETE, QueryProgress.ERROR}:
                     yield state
                     break
                 yield state
         finally:
-            pubsub.unsubscribe()
-            pubsub.close()
+            await pubsub.unsubscribe(key)
+            await pubsub.aclose()

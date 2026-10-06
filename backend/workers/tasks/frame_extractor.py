@@ -114,7 +114,9 @@ class FrameExtractorWorker:
                 return
             self.event_loop.run_until_complete(self.video_repo.commit())
 
-            is_updated = self.redis_repo.set_state_if_not_aborted(redis_key, VideoProgress.FRAME_COMPLETE)
+            is_updated = self.redis_repo.set_state_if_not_aborted(
+                redis_key, VideoProgress.FRAME_COMPLETE
+            )
             if not is_updated:
                 self._discard_created_frames(created_frame_ids, created_frame_uuids)
                 return
