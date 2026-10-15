@@ -5,16 +5,6 @@ export interface UploadVideoResponse {
   result: string;
 }
 
-export interface QueryVideoResponse {
-  task_id: string;
-  result: string;
-}
-
-export interface QueryResultResponse {
-  timestamps: string[];
-  result: string;
-}
-
 export interface VideoItem {
   uuid: string;
   title: string;
@@ -62,20 +52,64 @@ export const uploadVideo = async (file: File, title: string): Promise<UploadVide
 };
 
 /**
- * Initiates a search query on a specific video.
- * Backend endpoint: POST /video/query
+ * Streams matching frame IDs from the CLIP search endpoint.
+ * Backend endpoint: GET /clip/query/{video_uuid}?query_text=...
  */
-export const queryVideo = async (queryText: string, videoUuid: string): Promise<QueryVideoResponse> => {
-  const formData = new FormData();
-  formData.append('query_text', queryText);
-  formData.append('video_uuid', videoUuid);
+export const queryClip = async (queryText: string, videoUuid: string): Promise<string[]> => {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const url = new URL(`/clip/query/${encodeURIComponent(videoUuid)}`, baseUrl);
+  url.searchParams.set('query_text', queryText);
 
-  const response = await apiClient.post<QueryVideoResponse>('/video/query', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+  const response = await fetch(url, {
+    headers: { Accept: 'text/event-stream' },
+    credentials: 'include',
   });
-  return response.data;
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.detail || `CLIP query failed (${response.status})`);
+  }
+  if (!response.body) {
+    throw new Error('The CLIP query response did not include a stream.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let frameIds: string[] | null = null;
+
+  const readEvent = (event: string) => {
+    const data = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+      .join('\n');
+    if (!data) return;
+
+    const parsed: unknown = JSON.parse(data);
+    if (Array.isArray(parsed)) {
+      frameIds = parsed.map(String);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() || '';
+    events.forEach(readEvent);
+
+    if (done) {
+      if (buffer.trim()) readEvent(buffer);
+      break;
+    }
+  }
+
+  if (!frameIds) {
+    throw new Error('The CLIP query completed without returning frame IDs.');
+  }
+  return frameIds;
 };
 
 /**

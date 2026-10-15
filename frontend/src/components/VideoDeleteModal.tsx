@@ -39,7 +39,7 @@ const VideoDeleteModal: React.FC<VideoDeleteModalProps> = ({
     } catch (error) {
       const errorResponse = error as { message?: string };
       console.error('Failed to delete video:', error);
-      setDeleteError(errorResponse.message || 'Failed to delete video. Please try again.');
+      setDeleteError(errorResponse.message || 'Failed todelete video. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -51,7 +51,7 @@ const VideoDeleteModal: React.FC<VideoDeleteModalProps> = ({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="delete-video-title">
+      <div className="modal-container delete-video-modal" role="dialog" aria-modal="true" aria-labelledby="delete-video-title">
         <div className="modal-header">
           <div className="modal-title" id="delete-video-title">Delete Video</div>
           <button
@@ -70,10 +70,14 @@ const VideoDeleteModal: React.FC<VideoDeleteModalProps> = ({
               <span>{deleteError}</span>
             </div>
           )}
-          <p>
-            Delete <strong>{video.title}</strong>? This will permanently remove the
-            video and its search data.
-          </p>
+          <div className="delete-video-copy">
+            <h3 className="delete-video-question">
+              Delete <strong>{video.title}</strong>?
+            </h3>
+            <p className="delete-video-description">
+              This will permanently remove the video and its search data.
+            </p>
+          </div>
         </div>
 
         <div className="modal-footer">

@@ -51,8 +51,6 @@ def on_init():
 
     # Development code
     MariaDBConnection.init()
-    engine = MariaDBConnection._get_engine()
-    BaseModel.metadata.create_all(bind=engine)
 
     # local video storage
     path = os.environ["LOCAL_VIDEO_STORAGE"]

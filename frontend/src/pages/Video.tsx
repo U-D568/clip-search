@@ -1,14 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { queryVideo } from '../api/video';
-import { getWebSocketUrl } from '../api/client';
+import { getVideoUrl, queryClip } from '../api/video';
 import type { DashboardContextType } from '../layouts/Dashboard';
 
-const FALLBACK_VIDEO_URL = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-
 export const Video: React.FC = () => {
-
-  // Consume shared states from Dashboard layout via Outlet context
   const {
     videos,
     sessionFiles,
@@ -16,114 +11,91 @@ export const Video: React.FC = () => {
     selectedVideoUuid,
   } = useOutletContext<DashboardContextType>();
 
-  // Local search/prompt state
   const [prompt, setPrompt] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState('');
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [searchError, setSearchError] = useState('');
+  const [videoSource, setVideoSource] = useState<{ uuid: string; url: string } | null>(null);
+  const [videoLoadError, setVideoLoadError] = useState<{ uuid: string; message: string } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const relinkInputRef = useRef<HTMLInputElement>(null);
-
-  const selectedVideo = videos.find(v => v.uuid === selectedVideoUuid);
+  const selectedVideo = videos.find((video) => video.uuid === selectedVideoUuid);
   const videoFile = selectedVideo ? sessionFiles[selectedVideo.uuid] : null;
-  const videoSrc = videoFile ? URL.createObjectURL(videoFile) : (selectedVideo ? FALLBACK_VIDEO_URL : '');
+  const videoSrc = videoSource?.uuid === selectedVideoUuid ? videoSource.url : '';
+  const videoError = !videoFile && videoLoadError?.uuid === selectedVideoUuid
+    ? videoLoadError.message
+    : '';
 
-  const handleRelinkFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!selectedVideo) return;
+    if (videoFile) {
+      const localUrl = URL.createObjectURL(videoFile);
+      queueMicrotask(() => {
+        if (isCurrent) setVideoSource({ uuid: selectedVideo.uuid, url: localUrl });
+      });
+      return () => {
+        isCurrent = false;
+        URL.revokeObjectURL(localUrl);
+      };
+    }
+
+    getVideoUrl(selectedVideo.uuid)
+      .then(({ url }) => {
+        if (isCurrent) setVideoSource({ uuid: selectedVideo.uuid, url });
+      })
+      .catch((error: { message?: string }) => {
+        if (isCurrent) {
+          setVideoLoadError({
+            uuid: selectedVideo.uuid,
+            message: error.message || 'Could not load this video.',
+          });
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedVideo, videoFile]);
+
+  const handleRelinkFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (file && selectedVideoUuid) {
-      setSessionFiles(prev => ({
-        ...prev,
-        [selectedVideoUuid]: file
+      setSessionFiles((previous) => ({
+        ...previous,
+        [selectedVideoUuid]: file,
       }));
     }
   };
 
-  const handleSearchSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearchSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!prompt.trim() || !selectedVideoUuid) return;
 
     setIsSearching(true);
     setSearchError('');
     setSearchResults([]);
-    setSearchStatus('Analyzing query text...');
+    setSearchStatus('Searching video frames...');
 
     try {
-      const queryRes = await queryVideo(prompt, selectedVideoUuid);
-      const taskId = queryRes.task_id;
-      setSearchStatus('Connecting to results WebSocket...');
-
-      const wsUrl = getWebSocketUrl(`/video/query-result?task_id=${taskId}`);
-      const ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        setSearchStatus('Processing CLIP search (waiting for GPU worker)...');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.result === 'ok') {
-            setSearchResults(data.timestamps || []);
-            setSearchStatus('');
-          } else {
-            setSearchError('Search failed to produce results.');
-          }
-        } catch {
-          setSearchError('Failed to parse search response.');
-        } finally {
-          ws.close();
-        }
-      };
-
-      ws.onerror = (event) => {
-        console.error('WebSocket Error:', event);
-        setTimeout(() => {
-          const mockTimestamps = Array.from({ length: 4 }, () => 
-            (Math.random() * (videoRef.current?.duration || 180)).toFixed(2)
-          ).sort((a, b) => parseFloat(a) - parseFloat(b));
-          
-          setSearchResults(mockTimestamps);
-          setSearchStatus('');
-        }, 15000);
-        
-        setSearchStatus('Searching via fallback (this may take up to 15 seconds)...');
-      };
-
-      ws.onclose = () => {
-        setIsSearching(false);
-      };
-
-    } catch (err) {
-      const errorResponse = err as { message: string };
-      setSearchError(errorResponse.message || 'Failed to initiate search.');
+      const frameIds = await queryClip(prompt.trim(), selectedVideoUuid);
+      setSearchResults(frameIds);
+      setSearchStatus('');
+    } catch (error) {
+      const errorResponse = error as { message?: string };
+      setSearchError(errorResponse.message || 'Failed to search this video.');
+    } finally {
       setIsSearching(false);
     }
   };
 
-  const seekVideo = (timeStr: string) => {
-    if (videoRef.current) {
-      const seconds = parseFloat(timeStr);
-      if (!isNaN(seconds)) {
-        videoRef.current.currentTime = seconds;
-        videoRef.current.play().catch(() => {});
-      }
-    }
-  };
-
-  const formatTime = (timeStr: string) => {
-    const totalSeconds = parseFloat(timeStr);
-    if (isNaN(totalSeconds)) return '00:00';
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setPrompt(e.target.value);
-    e.target.style.height = 'auto';
-    e.target.style.height = `${e.target.scrollHeight}px`;
+  const handlePromptChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPrompt(event.target.value);
+    event.target.style.height = 'auto';
+    event.target.style.height = `${event.target.scrollHeight}px`;
   };
 
   return (
@@ -138,94 +110,75 @@ export const Video: React.FC = () => {
           </div>
 
           <div className="main-content-area">
-            {/* Video Player */}
             <div className="video-player-section">
               <div className="video-player-wrapper">
-                <video 
+                <video
                   ref={videoRef}
-                  className="video-player-element" 
-                  src={videoSrc}
+                  className="video-player-element"
+                  src={videoSrc || undefined}
                   controls
                 />
               </div>
 
-              {/* Relink banner if local file is missing */}
-              {!videoFile && (
+              {videoError && (
                 <div className="local-file-relink-banner">
                   <span>
-                    ℹ️ Running with sample video. Link your original file <strong>{selectedVideo.fileName}</strong> to play it locally.
+                    {videoError} Link the original file <strong>{selectedVideo.fileName}</strong> to play it locally.
                   </span>
                   <button className="relink-btn" onClick={() => relinkInputRef.current?.click()}>
                     Link File
                   </button>
-                  <input 
+                  <input
                     ref={relinkInputRef}
-                    type="file" 
-                    accept="video/*" 
-                    style={{ display: 'none' }} 
+                    type="file"
+                    accept="video/*"
+                    style={{ display: 'none' }}
                     onChange={handleRelinkFile}
                   />
                 </div>
               )}
             </div>
 
-            {/* Search query execution feedback */}
             {isSearching && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '12px', 
-                padding: '12px 24px', 
-                borderRadius: '8px', 
-                background: 'var(--accent-bg)', 
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                background: 'var(--accent-bg)',
                 border: '1px solid var(--accent-border)',
                 width: '100%',
                 maxWidth: '800px',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
               }}>
-                <div className="spinner" style={{ borderTopColor: 'var(--accent)' }}></div>
-                <span style={{ fontSize: '14px', color: 'var(--text-h)', fontWeight: 500 }}>{searchStatus}</span>
+                <div className="spinner" style={{ borderTopColor: 'var(--accent)' }} />
+                <span style={{ fontSize: '14px', color: 'var(--text-h)', fontWeight: 500 }}>
+                  {searchStatus}
+                </span>
               </div>
             )}
 
             {searchError && (
               <div className="alert alert-error" style={{ width: '100%', maxWidth: '800px', boxSizing: 'border-box' }}>
-                <svg className="alert-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-                  <path d="M12 8V12M12 16H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
                 <span>{searchError}</span>
               </div>
             )}
 
-            {/* Search Results Display */}
             {searchResults.length > 0 && (
               <div className="search-results-section">
-                <h3 className="results-header">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M21 21L15 15M17 10C17 13.866 13.866 17 9 17C4.13401 17 1 13.866 1 10C1 6.13401 4.13401 3 9 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Matching Clips
-                </h3>
-                <div className="timestamp-grid">
-                  {searchResults.map((timestamp, index) => (
-                    <button 
-                      key={index} 
-                      className="timestamp-chip" 
-                      onClick={() => seekVideo(timestamp)}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
-                      </svg>
-                      {formatTime(timestamp)}
-                    </button>
+                <h3 className="results-header">Matching Frames</h3>
+                <div className="frame-id-grid">
+                  {searchResults.map((frameId) => (
+                    <span key={frameId} className="frame-id-chip">
+                      Frame {frameId}
+                    </span>
                   ))}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Chat-style prompt at the bottom */}
           <div className="chat-prompt-section">
             <form onSubmit={handleSearchSubmit} className="chat-input-wrapper">
               <textarea
@@ -233,27 +186,28 @@ export const Video: React.FC = () => {
                 placeholder={`Ask Clip Search to find moments in "${selectedVideo.title}"... (e.g. "a person running")`}
                 value={prompt}
                 onChange={handlePromptChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSearchSubmit(e);
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleSearchSubmit(event);
                   }
                 }}
                 rows={1}
                 disabled={isSearching}
               />
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="chat-submit-btn"
                 disabled={!prompt.trim() || isSearching}
+                aria-label="Search video"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
             </form>
             <div className="chat-prompt-hint">
-              CLIP AI model will index and retrieve corresponding frames. Press Enter to search.
+              Describe the moment you are looking for. Press Enter to search.
             </div>
           </div>
         </>

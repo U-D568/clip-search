@@ -791,13 +791,13 @@ code {
   gap: 8px;
 }
 
-.timestamp-grid {
+.frame-id-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 10px;
 }
 
-.timestamp-chip {
+.frame-id-chip {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -811,17 +811,6 @@ code {
   font-size: 14px;
   color: var(--text-h);
   font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-.timestamp-chip:hover {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  transform: translateY(-1px);
-}
-
-.timestamp-chip:active {
-  transform: translateY(0);
 }
 
 /* Modal styling */
@@ -883,6 +872,36 @@ code {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.delete-video-modal .modal-body {
+  gap: 8px;
+  text-align: left;
+}
+
+.delete-video-modal .alert {
+  margin-bottom: 0;
+}
+
+.delete-video-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.delete-video-question {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.delete-video-description {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .modal-footer {

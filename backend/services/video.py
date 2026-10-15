@@ -75,6 +75,10 @@ class VideoService:
             raise ResourceNotFoundException()
         return video
 
+    async def get_video_url(self, video_uuid: str, user: User) -> str:
+        video = await self.find_video_by_uuid(video_uuid, user)
+        return self.s3_repo.get_url(video.file_path)
+
     async def validate_ownership(self, video: Video, user: User) -> bool:
         video = await self.video_repo.find_by_id(video.key)
         if video.owner == user.key:

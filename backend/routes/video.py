@@ -70,6 +70,27 @@ async def list_videos(
     return JSONResponse(result, status_code=200)
 
 
+@video_router.get("/url/{video_uuid}")
+async def get_video_url(
+    video_uuid: str,
+    video_service: VideoService = Depends(get_video_service),
+    user_service: UserService = Depends(get_user_service),
+    username: str = Depends(get_username),
+):
+    if username is None:
+        raise HTTPException(401, detail="Invalid Credential.")
+
+    try:
+        user = await user_service.get_user_by_username(username)
+        url = await video_service.get_video_url(video_uuid, user)
+    except UserNotFoundException:
+        raise HTTPException(401, detail=f"Unknown username: {username}")
+    except ResourceNotFoundException:
+        raise HTTPException(404, detail="Video not found.")
+
+    return JSONResponse({"url": url}, status_code=200)
+
+
 @video_router.delete("/{video_uuid}")
 async def remove_video(
     video_uuid: str,

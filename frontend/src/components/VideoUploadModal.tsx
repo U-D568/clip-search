@@ -81,7 +81,6 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 type="text"
                 className="form-input"
                 style={{ paddingLeft: '14px' }}
-                placeholder="Enter a friendly title for your video"
                 value={uploadTitle}
                 onChange={(event) => setUploadTitle(event.target.value)}
                 required
@@ -114,10 +113,6 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                   const file = event.target.files?.[0];
                   if (file) {
                     setUploadFile(file);
-                    if (!uploadTitle) {
-                      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-                      setUploadTitle(baseName);
-                    }
                   }
                 }}
               />
