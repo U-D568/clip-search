@@ -103,9 +103,6 @@ GPU 모델은 작업자 프로세스에만 올리고 API 서버는 가볍게 유
 ### 실시간 상태 전달 (Redis Pub/Sub → SSE)
 작업자가 상태를 Redis 채널에 발행하면 API 서버가 이를 구독해 SSE로 브라우저에 전달합니다. 구독을 먼저 시작한 뒤 현재 상태를 읽어, 그 사이에 발생한 상태 변경을 놓치지 않도록 했습니다.
 
-### 모델 분리 로딩
-`CLIPModel` 전체 대신 `CLIPVisionModelWithProjection`과 `CLIPTextModelWithProjection`을 작업자 역할(`DEVICE_TYPE`)에 따라 필요한 쪽만 로드합니다. 작업자 프로세스가 시작될 때 미리 로드해 첫 요청의 지연을 줄입니다.
-
 ## 프로젝트 구조
 
 ```text
@@ -135,74 +132,27 @@ k8s/base/                   # MariaDB, Redis, Qdrant, 작업자 매니페스트 
 - S3 버킷과 객체 업로드 · 다운로드 · 삭제 권한이 있는 AWS 자격 증명
 - GPU는 선택 사항입니다. CUDA를 사용할 수 없으면 CPU로 추론합니다.
 
-### 1. 환경 변수
 
-`backend/.env`를 만듭니다. 실제 자격 증명은 Git에 커밋하지 마세요.
-
-```dotenv
-ALLOW_ORIGINS=http://localhost:9002,http://127.0.0.1:9002
-LOCAL_VIDEO_STORAGE=./videos/
-
-# CLIP
-PRETRAINED_MODEL=openai/clip-vit-base-patch32
-MODEL_CACHE_DIR=.cache/models
-
-# Qdrant
-QDRANT_IP=127.0.0.1
-QDRANT_PORT=6333
-FRAME_COLLECTION=Frame
-DEMENSION=512
-
-# Redis / Celery (REDIS_URL은 호스트 이름만 적습니다)
-REDIS_URL=127.0.0.1
-BROKER_URL=redis://127.0.0.1:6379/0
-
-# MariaDB
-MARIADB_URL=127.0.0.1
-MARIADB_PORT=3306
-MARIADB_DATABASE=CLIP
-MARIADB_USER=clip_user
-MARIADB_PASSWORD=change-me
-MARIADB_ROOT_PASSWORD=change-me
-
-# JWT
-JWT_SECRET=충분히-긴-임의의-문자열
-HASH_ALGO=HS256
-ACCESS_TOKEN_EXPIRE=900
-REFRESH_TOKEN_EXPIRE=1296000
-
-# S3 (리전은 us-west-2로 고정되어 있습니다)
-S3_ACCESS_KEY=...
-S3_ACCESS_SECRET_KEY=...
-CLIP_BUCKET_NAME=...
-```
-
-`frontend/.env.local`:
-
-```dotenv
-VITE_API_BASE_URL=http://localhost:8000
-```
-
-### 2. 인프라 실행
+### 1. 인프라 실행
 
 ```bash
 cd backend
 docker compose up -d mariadb redis qdrant
 ```
 
-### 3. API 서버
+### 2. API 서버
 
 ```bash
 cd backend
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 9000
 ```
 
 API 서버는 시작 시 SQLAlchemy 모델을 기준으로 없는 테이블을 생성합니다. Qdrant 컬렉션은 작업자가 시작될 때 없으면 생성됩니다. API 문서는 <http://localhost:8000/docs>에서 볼 수 있습니다.
 
-### 4. Celery 작업자
+### 3. Celery 작업자
 
 로컬에서는 작업자 하나로 모든 큐를 처리할 수 있습니다. CLIP 모델은 첫 실행 시 Hugging Face에서 내려받습니다.
 
@@ -214,12 +164,12 @@ celery -A workers.worker.celery_app worker \
   --concurrency=1 --loglevel=info
 ```
 
-### 5. 프런트엔드
+### 4. 프런트엔드
 
 ```bash
 cd frontend
 npm ci
-npm run dev   # http://localhost:9002
+npm run dev   # http://localhost:9001
 ```
 
 ### Kubernetes
@@ -232,7 +182,7 @@ kubectl create namespace clip-search
 kubectl apply -k k8s/base
 ```
 
-작업자는 `device=cpu` / `device=gpu` 레이블이 붙은 노드를 우선 선택합니다. 현재 매니페스트는 단일 노드 개발 클러스터 기준으로, 이미지에는 의존성만 설치하고 소스 코드와 데이터는 hostPath 볼륨으로 마운트합니다. API 서버와 프런트엔드는 매니페스트에 포함되어 있지 않습니다.
+작업자는 `device=cpu` / `device=gpu` 레이블이 붙은 노드를 우선 선택합니다. 현재 매니페스트는 단일 노드 개발 클러스터 기준으로, 이미지에는 의존성만 설치하고 소스 코드와 데이터는 hostPath 볼륨으로 마운트합니다.
 
 ## API
 
@@ -249,9 +199,3 @@ kubectl apply -k k8s/base
 
 영상 상태는 `queued → in_progress → f_complete(추출 완료) → complete` 순으로 바뀌며, 중단 시 `aborted`, 실패 시 `error`가 됩니다.
 
-## 한계와 개선 계획
-
-- 자동화된 테스트가 없습니다. 상태 전이 로직(취소 · 완료 판정)부터 단위 테스트를 추가할 계획입니다.
-- refresh 토큰은 발급만 하고 재발급 엔드포인트가 없습니다. 쿠키의 `secure` 옵션도 개발 환경 기준으로 꺼져 있습니다.
-- DB 스키마는 시작 시 `create_all`로 생성하며, 마이그레이션 도구는 사용하지 않습니다.
-- 검색은 영상 단위로만 가능합니다. 여러 영상을 대상으로 한 통합 검색과 다국어 CLIP 모델 적용을 검토하고 있습니다.
