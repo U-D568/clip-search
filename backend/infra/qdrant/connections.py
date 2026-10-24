@@ -13,12 +13,7 @@ class QdrantConnection:
             url = get_qdrant_url()
             cls._client = QdrantClient(url)
 
-        client = cls.get_client()
-        col_name = os.environ["FRAME_COLLECTION"]
-        if not client.collection_exists(col_name):
-            embed_size = os.environ["DEMENSION"]
-            vconfig = VectorParams(size=embed_size, distance=Distance.COSINE)
-            client.create_collection(col_name, vconfig)
+        ensure_collection(cls._client)
 
     @classmethod
     def get_client(cls):
@@ -34,19 +29,19 @@ class AsyncQdrantConnection:
     def init(cls):
         if cls._client is None:
             url = get_qdrant_url()
+            # init() is called from sync contexts (celery signals),
+            # so the collection is created with a short-lived sync client
+            client = QdrantClient(url)
+            try:
+                ensure_collection(client)
+            finally:
+                client.close()
             cls._client = AsyncQdrantClient(url)
 
-        client = cls.get_client()
-        col_name = os.environ["FRAME_COLLECTION"]
-        if not client.collection_exists(col_name):
-            embed_size = os.environ["DEMENSION"]
-            vconfig = VectorParams(size=embed_size, distance=Distance.COSINE)
-            client.create_collection(col_name, vconfig)
-
     @classmethod
-    def close(cls):
+    async def close(cls):
         if cls._client:
-            cls._client.close()
+            await cls._client.close()
             cls._client = None
 
     @classmethod
@@ -54,6 +49,14 @@ class AsyncQdrantConnection:
         if cls._client is None:
             cls.init()
         return cls._client
+
+
+def ensure_collection(client: QdrantClient):
+    col_name = os.environ["FRAME_COLLECTION"]
+    if not client.collection_exists(col_name):
+        embed_size = int(os.environ["DEMENSION"])
+        vconfig = VectorParams(size=embed_size, distance=Distance.COSINE)
+        client.create_collection(col_name, vectors_config=vconfig)
 
 
 def get_qdrant_url():

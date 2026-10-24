@@ -569,19 +569,19 @@ code {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-.status-badge.in_progress, .status-badge.processing {
+.status-badge.in_progress, .status-badge.f_complete {
   background: rgba(59, 130, 246, 0.15);
   color: #2563eb;
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
-.status-badge.complete, .status-badge.f_complete {
+.status-badge.complete {
   background: rgba(16, 185, 129, 0.15);
   color: #059669;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-.status-badge.error {
+.status-badge.error, .status-badge.aborted {
   background: rgba(239, 68, 68, 0.15);
   color: #dc2626;
   border: 1px solid rgba(239, 68, 68, 0.3);
@@ -791,26 +791,49 @@ code {
   gap: 8px;
 }
 
-.frame-id-grid {
+.frame-result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 10px;
 }
 
-.frame-id-chip {
+.frame-result-card {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px;
+  padding: 0;
+  overflow: hidden;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  flex-direction: column;
   cursor: pointer;
-  font-family: var(--mono);
-  font-size: 14px;
+  text-align: left;
   color: var(--text-h);
+}
+
+.frame-result-card:hover {
+  border-color: var(--accent-border);
+}
+
+.frame-result-card img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  background: var(--border);
+}
+
+.frame-result-meta {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
   font-weight: 600;
+}
+
+.frame-result-rank {
+  color: var(--text);
+  font-weight: 500;
 }
 
 /* Modal styling */

@@ -8,7 +8,6 @@ fastapi[standard]
 pymysql
 python-dotenv
 redis
-requests
 sqlalchemy
 transformers
 torch

@@ -18,6 +18,17 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
   const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleClose = () => {
+    setUploadTitle('');
+    setUploadFile(null);
+    setIsUploading(false);
+    setUploadError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    onClose();
+  };
+
   const handleUploadSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!uploadFile) {
@@ -37,9 +48,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
       const file = uploadFile;
       await uploadVideo(file, title);
 
-      setUploadFile(null);
-      setUploadTitle('');
-      onClose();
+      handleClose();
 
       await onUploaded(file, title);
     } catch (err) {
@@ -60,7 +69,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
       <div className="modal-container">
         <div className="modal-header">
           <div className="modal-title">Register New Video</div>
-          <button className="modal-close-btn" onClick={onClose}>×</button>
+          <button className="modal-close-btn" onClick={handleClose} disabled={isUploading}>×</button>
         </div>
 
         <form onSubmit={handleUploadSubmit}>
@@ -83,6 +92,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
                 style={{ paddingLeft: '14px' }}
                 value={uploadTitle}
                 onChange={(event) => setUploadTitle(event.target.value)}
+                disabled={isUploading}
                 required
               />
             </div>
@@ -123,7 +133,7 @@ const VideoUploadModal: React.FC<VideoUploadModalProps> = ({
             <button
               type="button"
               className="modal-cancel-btn"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isUploading}
             >
               Cancel

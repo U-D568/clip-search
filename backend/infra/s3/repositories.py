@@ -58,6 +58,9 @@ class S3Repositories:
             return None
         return url
 
+    def get_frame_url(self, frame_uuid: str, expiration: int = 1800) -> str:
+        return self.get_url(f"temp/{frame_uuid}.jpg", expiration)
+
     def download_frame_files(self, frame_uuids: List[str]) -> List[BinaryIO]:
         s3_keys = [f"temp/{frame_uuid}.jpg" for frame_uuid in frame_uuids]
         return self.download_batch_fileobj(s3_keys)

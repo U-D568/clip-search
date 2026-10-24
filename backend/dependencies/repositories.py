@@ -14,6 +14,7 @@ from infra.db.repositories import (
     AsyncVideoRepository,
     AsyncUserRepository,
     AsyncRefreshTokenRepository,
+    AsyncFrameRepository,
 )
 from infra.qdrant.repositories import AsyncQdrantRepository
 from infra.redis.repositories import (
@@ -41,6 +42,12 @@ async def get_async_refresh_token_repository(
     session: AsyncSession = Depends(get_async_mariadb_connection),
 ) -> AsyncRefreshTokenRepository:
     return AsyncRefreshTokenRepository(session)
+
+
+async def get_async_frame_repository(
+    session: AsyncSession = Depends(get_async_mariadb_connection),
+) -> AsyncFrameRepository:
+    return AsyncFrameRepository(session)
 
 
 async def get_s3_repository(client=Depends(get_s3_client)) -> S3Repositories:

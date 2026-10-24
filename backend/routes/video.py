@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, HTTPException, Depends, Form
 from fastapi.responses import JSONResponse
 from fastapi.sse import ServerSentEvent, EventSourceResponse
 
@@ -13,7 +13,7 @@ from utils.exceptions import (
     InvalidCredentialsException,
     ResourceNotFoundException,
 )
-from utils.jwt import get_username
+from utils.jwt import get_username, require_username
 
 video_router = APIRouter(prefix="/video", tags=["video"])
 
@@ -21,7 +21,7 @@ video_router = APIRouter(prefix="/video", tags=["video"])
 @video_router.post("/upload")
 async def upload_video(
     file: UploadFile,
-    title: str,
+    title: str = Form(...),
     video_service: VideoService = Depends(get_video_service),
     user_service: UserService = Depends(get_user_service),
     username: str = Depends(get_username),
@@ -120,11 +120,14 @@ async def get_video_state(
     video_uuid: str,
     video_service: VideoService = Depends(get_video_service),
     user_service: UserService = Depends(get_user_service),
-    username: str = Depends(get_username),
+    username: str = Depends(require_username),
 ):
-    if username is None:
-        raise HTTPException(401, detail="Invalid Credential.")
-    user = await user_service.get_user_by_username(username)
-    video = await video_service.find_video_by_uuid(video_uuid, user)
+    try:
+        user = await user_service.get_user_by_username(username)
+        video = await video_service.find_video_by_uuid(video_uuid, user)
+    except (UserNotFoundException, ResourceNotFoundException):
+        yield ServerSentEvent(data={"detail": "Video not found."}, event="error")
+        return
+
     async for state in video_service.get_video_state(video):
-        yield ServerSentEvent(data=state)
+        yield ServerSentEvent(data=state.value)

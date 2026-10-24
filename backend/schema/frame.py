@@ -21,7 +21,7 @@ class BatchedFrames:
 class QdrantPoint(BaseModel):
     id: int
     vector: List[float]
-    metadata: "PointMetadata"
+    payload: "PointMetadata"
 
 
 class PointMetadata(BaseModel):
@@ -29,3 +29,10 @@ class PointMetadata(BaseModel):
     frame_key: int
     timestamp: float
     index: int
+
+
+class FrameSearchResult(BaseModel):
+    frame_id: int
+    timestamp: float
+    index: int
+    thumbnail_url: Optional[str]

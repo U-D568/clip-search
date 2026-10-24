@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { getVideoUrl, queryClip } from '../api/video';
+import type { FrameSearchResult } from '../api/video';
 import type { DashboardContextType } from '../layouts/Dashboard';
 
 export const Video: React.FC = () => {
@@ -14,7 +15,7 @@ export const Video: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState('');
-  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [searchResults, setSearchResults] = useState<FrameSearchResult[]>([]);
   const [searchError, setSearchError] = useState('');
   const [videoSource, setVideoSource] = useState<{ uuid: string; url: string } | null>(null);
   const [videoLoadError, setVideoLoadError] = useState<{ uuid: string; message: string } | null>(null);
@@ -81,8 +82,8 @@ export const Video: React.FC = () => {
     setSearchStatus('Searching video frames...');
 
     try {
-      const frameIds = await queryClip(prompt.trim(), selectedVideoUuid);
-      setSearchResults(frameIds);
+      const frames = await queryClip(prompt.trim(), selectedVideoUuid);
+      setSearchResults(frames);
       setSearchStatus('');
     } catch (error) {
       const errorResponse = error as { message?: string };
@@ -90,6 +91,19 @@ export const Video: React.FC = () => {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const seekTo = (timestamp: number) => {
+    const player = videoRef.current;
+    if (!player) return;
+    player.currentTime = timestamp;
+    player.play().catch(() => undefined);
+  };
+
+  const formatTimestamp = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const rest = Math.floor(seconds % 60);
+    return `${minutes}:${rest.toString().padStart(2, '0')}`;
   };
 
   const handlePromptChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -168,11 +182,23 @@ export const Video: React.FC = () => {
             {searchResults.length > 0 && (
               <div className="search-results-section">
                 <h3 className="results-header">Matching Frames</h3>
-                <div className="frame-id-grid">
-                  {searchResults.map((frameId) => (
-                    <span key={frameId} className="frame-id-chip">
-                      Frame {frameId}
-                    </span>
+                <div className="frame-result-grid">
+                  {searchResults.map((frame, rank) => (
+                    <button
+                      key={frame.frame_id}
+                      type="button"
+                      className="frame-result-card"
+                      onClick={() => seekTo(frame.timestamp)}
+                      title={`Jump to ${formatTimestamp(frame.timestamp)}`}
+                    >
+                      {frame.thumbnail_url && (
+                        <img src={frame.thumbnail_url} alt={`Frame at ${formatTimestamp(frame.timestamp)}`} loading="lazy" />
+                      )}
+                      <span className="frame-result-meta">
+                        <span>{formatTimestamp(frame.timestamp)}</span>
+                        <span className="frame-result-rank">#{rank + 1}</span>
+                      </span>
+                    </button>
                   ))}
                 </div>
               </div>

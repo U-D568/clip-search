@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from fastapi import Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
@@ -53,3 +53,10 @@ async def get_user_uuid(request: Request) -> Optional[str]:
         return payload.get("uuid")
     except JWTError:
         return None
+
+
+# Raises before the response starts, so it also works for streaming (SSE) endpoints
+async def require_username(username: Optional[str] = Depends(get_username)) -> str:
+    if username is None:
+        raise HTTPException(401, detail="Invalid Credential.")
+    return username

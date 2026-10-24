@@ -5,11 +5,22 @@ export interface UploadVideoResponse {
   result: string;
 }
 
+export type VideoState = 'queued' | 'in_progress' | 'f_complete' | 'complete' | 'aborted' | 'error';
+
+export const TERMINAL_VIDEO_STATES: VideoState[] = ['complete', 'aborted', 'error'];
+
 export interface VideoItem {
   uuid: string;
   title: string;
-  state: 'queued' | 'processing' | 'complete' | 'error';
+  state: VideoState;
   uploaded_time: string;
+}
+
+export interface FrameSearchResult {
+  frame_id: number;
+  timestamp: number;
+  index: number;
+  thumbnail_url: string | null;
 }
 
 export interface VideoUrlResponse {
@@ -27,10 +38,10 @@ export const getVideos = async (): Promise<VideoItem[]> => {
 
 /**
  * Fetches the S3 presigned URL for playing a video.
- * Backend endpoint: GET /video/{uuid}/url
+ * Backend endpoint: GET /video/url/{uuid}
  */
 export const getVideoUrl = async (uuid: string): Promise<VideoUrlResponse> => {
-  const response = await apiClient.get<VideoUrlResponse>(`/video/${uuid}/url`);
+  const response = await apiClient.get<VideoUrlResponse>(`/video/url/${uuid}`);
   return response.data;
 };
 
@@ -52,10 +63,11 @@ export const uploadVideo = async (file: File, title: string): Promise<UploadVide
 };
 
 /**
- * Streams matching frame IDs from the CLIP search endpoint.
+ * Streams the frames matching a text query from the CLIP search endpoint.
+ * The server sends a "result" event with the frames, or an "error" event.
  * Backend endpoint: GET /clip/query/{video_uuid}?query_text=...
  */
-export const queryClip = async (queryText: string, videoUuid: string): Promise<string[]> => {
+export const queryClip = async (queryText: string, videoUuid: string): Promise<FrameSearchResult[]> => {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
   const url = new URL(`/clip/query/${encodeURIComponent(videoUuid)}`, baseUrl);
   url.searchParams.set('query_text', queryText);
@@ -76,19 +88,26 @@ export const queryClip = async (queryText: string, videoUuid: string): Promise<s
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let frameIds: string[] | null = null;
+  let frames: FrameSearchResult[] | null = null;
+  let errorMessage: string | null = null;
 
   const readEvent = (event: string) => {
-    const data = event
-      .split(/\r?\n/)
+    const lines = event.split(/\r?\n/);
+    const eventType = lines
+      .find((line) => line.startsWith('event:'))
+      ?.slice(6)
+      .trim() || 'message';
+    const data = lines
       .filter((line) => line.startsWith('data:'))
       .map((line) => line.slice(5).trimStart())
       .join('\n');
     if (!data) return;
 
     const parsed: unknown = JSON.parse(data);
-    if (Array.isArray(parsed)) {
-      frameIds = parsed.map(String);
+    if (eventType === 'error') {
+      errorMessage = (parsed as { detail?: string })?.detail || 'Search failed.';
+    } else if (Array.isArray(parsed)) {
+      frames = parsed as FrameSearchResult[];
     }
   };
 
@@ -106,10 +125,39 @@ export const queryClip = async (queryText: string, videoUuid: string): Promise<s
     }
   }
 
-  if (!frameIds) {
-    throw new Error('The CLIP query completed without returning frame IDs.');
+  if (errorMessage) {
+    throw new Error(errorMessage);
   }
-  return frameIds;
+  if (!frames) {
+    throw new Error('The CLIP query completed without returning frames.');
+  }
+  return frames;
+};
+
+/**
+ * Subscribes to the processing state of a video until it reaches a terminal state.
+ * Returns a function that closes the stream.
+ * Backend endpoint: GET /video/progress/{uuid} (SSE)
+ */
+export const watchVideoProgress = (
+  uuid: string,
+  onState: (state: VideoState) => void,
+): (() => void) => {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const url = new URL(`/video/progress/${encodeURIComponent(uuid)}`, baseUrl);
+  const source = new EventSource(url, { withCredentials: true });
+
+  source.onmessage = (event) => {
+    const state = JSON.parse(event.data) as VideoState;
+    onState(state);
+    // EventSource reconnects automatically, so close it once processing is over
+    if (TERMINAL_VIDEO_STATES.includes(state)) {
+      source.close();
+    }
+  };
+  source.onerror = () => source.close();
+
+  return () => source.close();
 };
 
 /**

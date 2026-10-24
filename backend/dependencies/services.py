@@ -4,6 +4,7 @@ from infra.db.repositories import (
     AsyncVideoRepository,
     AsyncUserRepository,
     AsyncRefreshTokenRepository,
+    AsyncFrameRepository,
 )
 from infra.qdrant.repositories import AsyncQdrantRepository
 from infra.s3.repositories import S3Repositories
@@ -12,6 +13,7 @@ from .repositories import (
     get_async_video_repository,
     get_async_user_repository,
     get_async_refresh_token_repository,
+    get_async_frame_repository,
     get_s3_repository,
     get_async_qdrant_reposiroty,
     get_async_redis_video_reposiroty,
@@ -50,6 +52,8 @@ async def get_user_service(
 async def get_clip_service(
     user_repo: AsyncUserRepository = Depends(get_async_user_repository),
     video_repo: AsyncVideoRepository = Depends(get_async_video_repository),
+    frame_repo: AsyncFrameRepository = Depends(get_async_frame_repository),
     query_repo: AsyncQueryReidsRepository = Depends(get_async_query_repository),
+    s3_repo: S3Repositories = Depends(get_s3_repository),
 ) -> CLIPService:
-    return CLIPService(user_repo, video_repo, query_repo)
+    return CLIPService(user_repo, video_repo, frame_repo, query_repo, s3_repo)

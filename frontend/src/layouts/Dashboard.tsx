@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import VideoSidebar from '../pages/VideoSidebar';
-import { getVideos } from '../api/video';
+import { getVideos, watchVideoProgress, TERMINAL_VIDEO_STATES } from '../api/video';
 import type { LocalVideoMeta } from '../types/video';
 
 export interface DashboardContextType {
@@ -50,6 +50,25 @@ export const Dashboard: React.FC = () => {
       fetchVideos();
     }
   }, [user?.username]);
+
+  // Stream processing state for videos that are still being extracted/embedded
+  const processingUuids = videos
+    .filter((video) => !TERMINAL_VIDEO_STATES.includes(video.state))
+    .map((video) => video.uuid)
+    .join(',');
+
+  useEffect(() => {
+    if (!processingUuids) return;
+
+    const closers = processingUuids.split(',').map((uuid) =>
+      watchVideoProgress(uuid, (state) => {
+        setVideos((previous) =>
+          previous.map((video) => (video.uuid === uuid ? { ...video, state } : video)),
+        );
+      }),
+    );
+    return () => closers.forEach((close) => close());
+  }, [processingUuids]);
 
   // 2. Sidebar structural states
   const [sidebarWidth, setSidebarWidth] = useState(300);

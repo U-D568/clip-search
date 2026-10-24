@@ -33,6 +33,8 @@ class Video(BaseModel):
     owner = Column(Integer, ForeignKey("user.key"), nullable=False)
     uuid = Column(String(36), unique=True, default=uuid.uuid4)
     state = Column(Enum(VideoProgress))
+    extracted_count = Column(Integer, nullable=False, default=0, server_default="0")
+    processed_count = Column(Integer, nullable=False, default=0, server_default="0")
 
     # relations
     user = relationship("User", back_populates="videos")

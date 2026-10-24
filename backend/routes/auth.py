@@ -55,8 +55,8 @@ async def register(
     try:
         await service.register(user_data.username, user_data.password)
     except UserAlreadyExistException:
-        return HTTPException(401, "User Already Exists")
+        raise HTTPException(409, "User Already Exists")
     except DBReadException:
-        return HTTPException(500, "Failed to make a new account")
+        raise HTTPException(500, "Failed to make a new account")
 
     return JSONResponse({"username": user_data.username}, status_code=200)

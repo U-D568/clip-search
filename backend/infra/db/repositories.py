@@ -2,7 +2,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, update
 
-from infra.db.models import BaseModel, User, Video, Frame, VideoProgress, RefreshToken
+from infra.db.models import BaseModel, User, Video, Frame, RefreshToken
 from utils import enums
 from utils.exceptions import UserNotFoundException
 
@@ -122,13 +122,6 @@ class AsyncVideoRepository(AsyncBaseRepository):
         )
         result = await self.session.execute(stmt)
         return result.rowcount == 1
-
-class AsyncVideoProgressRepository(AsyncBaseRepository):
-    def __init__(self, session: AsyncSession):
-        super().__init__(VideoProgress, session)
-
-    async def add(self, progress: VideoProgress):
-        await self.session.add(progress)
 
 
 class AsyncFrameRepository(AsyncBaseRepository):

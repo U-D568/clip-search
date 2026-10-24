@@ -14,11 +14,24 @@ class VideoProgress(Enum):
     ABORTED = "aborted"
     ERROR = "error"
 
+    # no further state change happens after a terminal state
+    @property
+    def is_terminal(self) -> bool:
+        return self in {
+            VideoProgress.COMPLETE,
+            VideoProgress.ABORTED,
+            VideoProgress.ERROR,
+        }
+
 class QueryProgress(Enum):
     QUEUED = "queued"
     IN_PROGRESS = "in_progress"
     COMPLETE = "complete"
     ERROR = "error"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {QueryProgress.COMPLETE, QueryProgress.ERROR}
 
 class TokenType(Enum):
     ACCESS = "ACCESS"

@@ -8,8 +8,9 @@ import uvicorn
 
 from routes.video import video_router
 from routes.auth import auth_router
+from routes.clip import clip_router
 from infra.db.connections import MariaDBConnection, AsyncMariaDBConnection
-from infra.db.models import BaseModel, User
+from infra.db.models import BaseModel
 from infra.s3.connections import S3Connection
 from infra.redis.connections import RedisConnection
 from utils.logging_config import init_logger
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
     # incldes routers
     app.include_router(video_router)
     app.include_router(auth_router)
+    app.include_router(clip_router)
 
     # CORS
     allow_origins = [url.strip() for url in os.environ["ALLOW_ORIGINS"].split(",")]
@@ -42,15 +44,12 @@ def create_app() -> FastAPI:
 async def lifespan(app: FastAPI):
     on_init()
     yield
-    on_exit()
+    await on_exit()
 
 
 def on_init():
     # DB Initalization
     AsyncMariaDBConnection.init()
-
-    # Development code
-    MariaDBConnection.init()
 
     # local video storage
     path = os.environ["LOCAL_VIDEO_STORAGE"]
@@ -66,11 +65,10 @@ def on_init():
     init_logger("backend.log")
 
 
-def on_exit():
-    AsyncMariaDBConnection.close()
+async def on_exit():
+    await AsyncMariaDBConnection.close()
     S3Connection.close()
     RedisConnection.close()
-    pass
 
 
 app = create_app()

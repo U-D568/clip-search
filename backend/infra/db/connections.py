@@ -4,7 +4,7 @@ from typing import Generator, AsyncGenerator
 
 from dotenv import load_dotenv
 
-from sqlalchemy import create_engine
+from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
@@ -61,6 +61,7 @@ class AsyncMariaDBConnection:
             finally:
                 await session.close()
 
+    @classmethod
     def get_session(cls) -> AsyncSession:
         session_factory = cls._get_session_factory()
         return session_factory()
@@ -94,6 +95,10 @@ class MariaDBConnection:
         if cls._session_factory is None:
             raise RuntimeError("Sync session factoy is not initalized.")
         return cls._session_factory
+
+    @classmethod
+    def create_tables(cls, metadata: MetaData):
+        metadata.create_all(cls._get_engine())
 
     @classmethod
     @contextmanager

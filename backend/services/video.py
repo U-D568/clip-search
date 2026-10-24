@@ -94,11 +94,10 @@ class VideoService:
             raise InvalidCredentialsException()
 
         try:
-            redis_key = str(video.key)
-            await self.redis_repo.set_state(redis_key, VideoProgress.ABORTED)
+            # workers check the DB state, so committing ABORTED stops them
             await self.video_repo.set_state(video.key, VideoProgress.ABORTED)
             await self.video_repo.commit()
-            await self.redis_repo.publish_state(redis_key, VideoProgress.ABORTED)
+            await self.redis_repo.publish_state(str(video.key), VideoProgress.ABORTED)
 
             frame_uuids = await self.video_repo.find_frame_uuids_by_video_id(
                 video.key
@@ -112,12 +111,18 @@ class VideoService:
             raise
 
     async def get_video_state(self, video: Video) -> AsyncGenerator[VideoProgress, None]:
-        if video.state == VideoProgress.COMPLETE:
-            yield video.state
-            return
-
-        redis_key = str(video.key)
-        generator = self.redis_repo.subscribe(redis_key)
-        async for state in generator:
+        # subscribe before reading the state so no change between them is missed
+        async with self.redis_repo.subscribe(str(video.key)) as states:
+            # end the current read snapshot so the latest committed state is visible
+            await self.video_repo.rollback()
+            state = await self.video_repo.get_state_by_id(video.key)
+            if state is None:
+                return
             yield state
-        await self.redis_repo.delete_progress(redis_key)
+            if state.is_terminal:
+                return
+
+            async for state in states:
+                yield state
+                if state.is_terminal:
+                    return

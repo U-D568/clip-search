@@ -1,18 +1,13 @@
 from typing import List, AsyncGenerator
 
-import numpy as np
-import torch
-
-from ai.models.clip import get_device
-from ai.models.encoder import (
-    text_encoding,
-    text_projection,
-    image_embedding,
-    image_projection,
+from infra.db.repositories import (
+    AsyncVideoRepository,
+    AsyncUserRepository,
+    AsyncFrameRepository,
 )
-from ai.utils.ops import cosine_similarity
-from infra.db.repositories import AsyncVideoRepository, AsyncUserRepository
 from infra.redis.repositories import AsyncQueryReidsRepository
+from infra.s3.repositories import S3Repositories
+from schema.frame import FrameSearchResult
 from utils.enums import QueryProgress
 from utils.exceptions import ResourceNotFoundException
 from workers.tasks.text_embedder import text_embedding
@@ -23,15 +18,19 @@ class CLIPService:
         self,
         user_repo: AsyncUserRepository,
         video_repo: AsyncVideoRepository,
+        frame_repo: AsyncFrameRepository,
         query_repo: AsyncQueryReidsRepository,
+        s3_repo: S3Repositories,
     ):
         self.user_repo = user_repo
         self.video_repo = video_repo
+        self.frame_repo = frame_repo
         self.query_repo = query_repo
+        self.s3_repo = s3_repo
 
     async def query_frame(
         self, video_uuid: str, query_text: str, username: str
-    ) -> AsyncGenerator[List[int], None]:
+    ) -> AsyncGenerator[List[FrameSearchResult], None]:
         user = await self.user_repo.get_by_username(username)
         video = await self.video_repo.find_by_uuid(video_uuid, user.key)
         if video is None:
@@ -43,42 +42,26 @@ class CLIPService:
         # start embedding task
         text_embedding.delay(query_text, task_uuid)
 
-        query = await self.query_repo.get_query(task_uuid)
-        if query.state == QueryProgress.COMPLETE:
-            ids = await self.query_repo.get_ids(task_uuid)
-            yield ids
-            return
-
         async for state in self.query_repo.subscribe(task_uuid):
             if state == QueryProgress.COMPLETE:
-                yield await self.query_repo.get_ids(task_uuid)
+                frame_ids = await self.query_repo.get_ids(task_uuid)
+                yield await self._get_frames(frame_ids)
                 break
             if state == QueryProgress.ERROR:
                 raise RuntimeError(f"Text embedding query {task_uuid} failed")
 
+    async def _get_frames(self, frame_ids: List[int]) -> List[FrameSearchResult]:
+        frames = await self.frame_repo.search_by_ids(frame_ids)
+        frames_by_id = {frame.key: frame for frame in frames}
 
-class CLIPServiceLegacy:
-    def __init__(self):
-        self._device = get_device()
-
-    def text_embedding(self, model, processor, text: List[str]) -> torch.Tensor:
-        text_embeds = text_encoding(model, processor, text, self._device)
-        text_embeds = text_projection(model, text_embeds)
-
-        return text_embeds
-
-    def image_embedding(
-        self, model, processor, images: List[np.ndarray]
-    ) -> torch.Tensor:
-        image_embeds = image_embedding(model, processor, images, self._device)
-        image_embeds = image_projection(model, image_embeds)
-
-        return image_embeds
-
-    def query_image(
-        self, text_embeds: torch.Tensor, image_embeds: torch.Tensor, topk=5
-    ) -> List[int]:
-        similarity = cosine_similarity(text_embeds, image_embeds)
-        indices = similarity.topk(k=topk, dim=-1).indices.numpy().tolist()[0]
-
-        return indices
+        # keep the similarity order returned by the vector search
+        return [
+            FrameSearchResult(
+                frame_id=frame.key,
+                timestamp=frame.timestamp,
+                index=frame.index,
+                thumbnail_url=self.s3_repo.get_frame_url(frame.uuid),
+            )
+            for frame_id in frame_ids
+            if (frame := frames_by_id.get(frame_id)) is not None
+        ]

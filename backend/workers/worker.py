@@ -35,15 +35,12 @@ def on_init(sender: Celery, **kargs):
 
 @worker_process_shutdown.connect
 def on_shutdown(sender: Celery, **kargs):
-    AsyncMariaDBConnection.close()
-    AsyncQdrantConnection.close()
+    event_loop = asyncio.get_event_loop()
+    event_loop.run_until_complete(AsyncMariaDBConnection.close())
+    event_loop.run_until_complete(AsyncQdrantConnection.close())
     S3Connection.close()
     RedisConnection.close()
-    try:
-        event_loop = asyncio.get_event_loop()
-        event_loop.close()
-    except:
-        pass
+    event_loop.close()
 
 
 celery_app = Celery(
