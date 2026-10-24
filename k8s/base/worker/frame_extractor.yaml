@@ -30,8 +30,8 @@ spec:
           image: docker.io/library/clip-search:dev
           imagePullPolicy: IfNotPresent
           env:
-            - name: WORKER_TYPE
-              value: CPU
+            - name: DEVICE_TYPE
+              value: FRAME_EXTRACTION
             - name: BROKER_URL
               valueFrom:
                 configMapKeyRef:

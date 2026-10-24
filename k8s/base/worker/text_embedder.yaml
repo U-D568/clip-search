@@ -17,9 +17,10 @@ spec:
     spec:
       affinity:
         nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              preference:
+                matchExpressions:
                   - key: device
                     operator: In
                     values:
@@ -29,8 +30,8 @@ spec:
           image: docker.io/library/clip-search:dev
           imagePullPolicy: IfNotPresent
           env:
-            - name: WORKER_TYPE
-              value: GPU
+            - name: DEVICE_TYPE
+              value: TEXT_EMBEDDING
             - name: BROKER_URL
               valueFrom:
                 configMapKeyRef:
@@ -49,7 +50,7 @@ spec:
           command:
             - celery
             - -A
-            - app.tasks.worker.celery_app
+            - workers.worker.celery_app
             - worker
             - -Q
             - text_queue
