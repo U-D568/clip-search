@@ -5,7 +5,7 @@ export interface UploadVideoResponse {
   result: string;
 }
 
-export type VideoState = 'queued' | 'in_progress' | 'f_complete' | 'complete' | 'aborted' | 'error';
+export type VideoState = 'queued' | 'in_progress' | 'extracted' | 'complete' | 'aborted' | 'error';
 
 export const TERMINAL_VIDEO_STATES: VideoState[] = ['complete', 'aborted', 'error'];
 

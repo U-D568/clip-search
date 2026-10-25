@@ -569,7 +569,7 @@ code {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-.status-badge.in_progress, .status-badge.f_complete {
+.status-badge.in_progress, .status-badge.extracted {
   background: rgba(59, 130, 246, 0.15);
   color: #2563eb;
   border: 1px solid rgba(59, 130, 246, 0.3);

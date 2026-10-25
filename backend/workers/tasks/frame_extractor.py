@@ -1,12 +1,12 @@
 import asyncio
 import os
-from typing import List
+from typing import List, Optional
 
 from infra.db.connections import AsyncMariaDBConnection
 from infra.db.models import Frame
 from infra.db.repositories import AsyncFrameRepository, AsyncVideoRepository
 from infra.redis.connections import RedisConnection
-from infra.redis.repositories import VideoRedisRepository
+from infra.redis.repositories import AsyncRedisVideoRepository
 from infra.s3.connections import S3Connection
 from infra.s3.repositories import S3Repositories
 from utils.enums import VideoProgress
@@ -23,7 +23,7 @@ class FrameExtractorWorker:
         self.s3_repo = S3Repositories(s3_client, os.environ["CLIP_BUCKET_NAME"])
 
         redis_client = RedisConnection.get_client()
-        self.redis_repo = VideoRedisRepository(redis_client)
+        self.redis_repo = AsyncRedisVideoRepository(redis_client)
 
         async_session = AsyncMariaDBConnection.get_session()
         self.frame_repo = AsyncFrameRepository(async_session)
@@ -52,25 +52,25 @@ class FrameExtractorWorker:
             return
         self.event_loop.run_until_complete(self.video_repo.commit())
 
-        # get video url and initialize redis progress
-        video_url = self.s3_repo.get_url(video.file_path)
         redis_key = str(video.key)
-        self.redis_repo.init_progress(redis_key)
-        self.redis_repo.publish_state(redis_key, VideoProgress.IN_PROGRESS)
+        state = self.event_loop.run_until_complete(
+            self.redis_repo.init_progress(redis_key)
+        )
+        if state == VideoProgress.ABORTED or state == VideoProgress.ERROR:
+            return
+        self.event_loop.run_until_complete(
+            self.redis_repo.publish_state(redis_key, VideoProgress.IN_PROGRESS)
+        )
 
         created_frame_ids: List[int] = []
         created_frame_uuids: List[str] = []
 
         batches = batch_generator(
-            frame_generator(video_url, frame_interval, "jpg"),
+            frame_generator(video.file_path, frame_interval, "jpg"),
             batch_size,
         )
         try:
             for batch in batches:
-                if not self._is_aborted(redis_key):
-                    self._discard_created_frames(created_frame_ids, created_frame_uuids)
-                    return
-
                 orm_frames = [
                     Frame(
                         video_key=video_key,
@@ -79,56 +79,46 @@ class FrameExtractorWorker:
                     )
                     for item in batch
                 ]
-
-                try:
-                    self.frame_repo.add_all(orm_frames)
-                    self.event_loop.run_until_complete(self.frame_repo.commit())
-                except Exception as error:
-                    self.event_loop.run_until_complete(self.frame_repo.rollback())
-                    raise RuntimeError("Failed to insert Frame data to DB") from error
+                self.frame_repo.add_all(orm_frames)
+                self.event_loop.run_until_complete(self.frame_repo.commit())
 
                 frame_ids = [frame.key for frame in orm_frames]
                 frame_uuids = [str(frame.uuid) for frame in orm_frames]
                 created_frame_ids.extend(frame_ids)
                 created_frame_uuids.extend(frame_uuids)
 
-                if not self._is_aborted(redis_key):
-                    self._discard_created_frames(created_frame_ids, created_frame_uuids)
+                state = self.event_loop.run_until_complete(
+                    self.redis_repo.add_extracted(redis_key, len(batch))
+                )
+                if state != VideoProgress.IN_PROGRESS:
+                    self._stop(video_key, state, created_frame_ids, created_frame_uuids)
                     return
 
-                self.redis_repo.add_extracted(
-                    redis_key, len(batch)
-                )  # update the extracted count in Redis
                 for item, frame_uuid in zip(batch, frame_uuids):  # upload frames to S3
                     self.s3_repo.upload(item["frame"], f"temp/{frame_uuid}.jpg")
 
                 frame_embedding.delay(video_key, frame_ids, frame_uuids)
 
+            self.event_loop.run_until_complete(
+                self.redis_repo.set_state(redis_key, VideoProgress.EXTRACTED)
+            )
+
             is_updated = self.event_loop.run_until_complete(
-                self.video_repo.set_state_if_not_aborted(
-                    video_key, VideoProgress.FRAME_COMPLETE
-                )
+                self.video_repo.set_state_if_not_aborted(video_key, VideoProgress.EXTRACTED)
             )
-            if not is_updated:
-                self._discard_created_frames(created_frame_ids, created_frame_uuids)
-                return
             self.event_loop.run_until_complete(self.video_repo.commit())
-
-            is_updated = self.redis_repo.set_state_if_not_aborted(
-                redis_key, VideoProgress.FRAME_COMPLETE
-            )
-            if not is_updated:
-                self._discard_created_frames(created_frame_ids, created_frame_uuids)
-                return
+            if is_updated:
+                self.event_loop.run_until_complete(
+                    self.redis_repo.publish_state(redis_key, state)
+                )
         except Exception:
-            if not self._is_aborted(redis_key):
+            self.event_loop.run_until_complete(self.video_repo.rollback())
+            state = self.event_loop.run_until_complete(
+                self.redis_repo.get_state(redis_key)
+            )
+            if state == VideoProgress.ABORTED or state == VideoProgress.ERROR:
                 self._discard_created_frames(created_frame_ids, created_frame_uuids)
                 return
-            raise
-
-    def _is_aborted(self, key: str) -> bool:
-        state = self.redis_repo.get_state(key)
-        return state is not None and state != VideoProgress.ABORTED
 
     def _discard_created_frames(
         self,

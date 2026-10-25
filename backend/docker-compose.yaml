@@ -30,16 +30,16 @@ services:
   cpu_worker:
     image: clip_search
     container_name: clip_cpu_worker
-    command: celery -A app.tasks.worker.celery_app worker -Q cpu_queue --concurrency=4 --loglevel=info
+    command: celery -A workers.worker.celery_app worker -Q extraction_queue --concurrency=4 --loglevel=info
     environment:
-      WORKER_TYPE: CPU
+      DEVICE_TYPE: FRAME_EXTRACTION
 
   gpu_worker:
     image: clip_search
     container_name: clip_gpu_worker
-    command: celery -A app.tasks.worker.celery_app worker -Q embedding_queue --concurrency=1 --loglevel=info
+    command: celery -A workers.worker.celery_app worker -Q embedding_queue,text_queue --concurrency=1 --loglevel=info
     environment:
-      WORKER_TYPE: GPU
+      DEVICE_TYPE: FRAME_EMBEDDING
 
   fastapi:
     image: clip_search

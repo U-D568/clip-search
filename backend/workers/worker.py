@@ -39,7 +39,7 @@ def on_shutdown(sender: Celery, **kargs):
     event_loop.run_until_complete(AsyncMariaDBConnection.close())
     event_loop.run_until_complete(AsyncQdrantConnection.close())
     S3Connection.close()
-    RedisConnection.close()
+    event_loop.run_until_complete(RedisConnection.close())
     event_loop.close()
 
 

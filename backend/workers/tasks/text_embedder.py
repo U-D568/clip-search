@@ -9,7 +9,7 @@ from infra.db.repositories import AsyncVideoRepository
 from infra.qdrant.connections import AsyncQdrantConnection
 from infra.qdrant.repositories import AsyncQdrantRepository
 from infra.redis.connections import RedisConnection
-from infra.redis.repositories import QueryRedisRepository
+from infra.redis.repositories import AsyncRedisQueryRepository
 from utils.enums import QueryProgress
 from workers.worker import celery_app
 
@@ -17,7 +17,7 @@ from workers.worker import celery_app
 class TextEmbeddingWorker:
     def __init__(self) -> None:
         self.event_loop = asyncio.get_event_loop()
-        self.redis_repo = QueryRedisRepository(RedisConnection.get_client())
+        self.redis_repo = AsyncRedisQueryRepository(RedisConnection.get_client())
 
         async_session = AsyncMariaDBConnection.get_session()
         self.video_repo = AsyncVideoRepository(async_session)
@@ -35,7 +35,9 @@ class TextEmbeddingWorker:
             if topk <= 0:
                 raise ValueError("topk must be greater than zero")
 
-            query_state = self.redis_repo.get_query(task_uuid)
+            query_state = self.event_loop.run_until_complete(
+                self.redis_repo.get_query(task_uuid)
+            )
             video = self.event_loop.run_until_complete(
                 self.video_repo.find_by_id(query_state.video_key)
             )
@@ -57,7 +59,9 @@ class TextEmbeddingWorker:
             )
             frame_ids = [int(point.id) for point in response.points]
 
-            self.redis_repo.set_ids(task_uuid, frame_ids)
+            self.event_loop.run_until_complete(
+                self.redis_repo.set_ids(task_uuid, frame_ids)
+            )
             self._set_state(task_uuid, QueryProgress.COMPLETE)
             return frame_ids
         except Exception as error:
@@ -68,8 +72,8 @@ class TextEmbeddingWorker:
             raise
 
     def _set_state(self, task_uuid: str, state: QueryProgress) -> None:
-        self.redis_repo.set_state(task_uuid, state)
-        self.redis_repo.publish(task_uuid, state)
+        self.event_loop.run_until_complete(self.redis_repo.set_state(task_uuid, state))
+        self.event_loop.run_until_complete(self.redis_repo.publish(task_uuid, state))
 
 
 @celery_app.task(queue="text_queue", name="text_embedding")

@@ -30,10 +30,10 @@ services:
   cpu_worker:
     image: clip_search:dev
     container_name: clip_cpu_worker
-    command: celery -A app.tasks.worker.celery_app worker -Q cpu_queue --concurrency=4 --loglevel=info
+    command: celery -A workers.worker.celery_app worker -Q extraction_queue --concurrency=4 --loglevel=info
     restart: unless-stopped
     environment:
-      WORKER_TYPE: CPU
+      DEVICE_TYPE: FRAME_EXTRACTION
       BROKER_URL: "redis://redis:6379/0"
       MARIADB_URL: mariadb
     volumes:
@@ -43,10 +43,10 @@ services:
   gpu_worker:
     image: clip_search:dev
     container_name: clip_gpu_worker
-    command: celery -A app.tasks.worker.celery_app worker -Q embedding_queue --concurrency=1 --loglevel=info
+    command: celery -A workers.worker.celery_app worker -Q embedding_queue,text_queue --concurrency=1 --loglevel=info
     restart: unless-stopped
     environment:
-      WORKER_TYPE: GPU
+      DEVICE_TYPE: FRAME_EMBEDDING
       BROKER_URL: "redis://redis:6379/0"
       MARIADB_URL: mariadb
       QDRANT_IP: qdrant

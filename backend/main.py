@@ -68,7 +68,7 @@ def on_init():
 async def on_exit():
     await AsyncMariaDBConnection.close()
     S3Connection.close()
-    RedisConnection.close()
+    await RedisConnection.close()
 
 
 app = create_app()

@@ -5,7 +5,7 @@ from infra.db.repositories import (
     AsyncUserRepository,
     AsyncFrameRepository,
 )
-from infra.redis.repositories import AsyncQueryReidsRepository
+from infra.redis.repositories import AsyncRedisQueryRepository
 from infra.s3.repositories import S3Repositories
 from schema.frame import FrameSearchResult
 from utils.enums import QueryProgress
@@ -19,7 +19,7 @@ class CLIPService:
         user_repo: AsyncUserRepository,
         video_repo: AsyncVideoRepository,
         frame_repo: AsyncFrameRepository,
-        query_repo: AsyncQueryReidsRepository,
+        query_repo: AsyncRedisQueryRepository,
         s3_repo: S3Repositories,
     ):
         self.user_repo = user_repo

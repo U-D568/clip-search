@@ -94,10 +94,11 @@ class VideoService:
             raise InvalidCredentialsException()
 
         try:
-            # workers check the DB state, so committing ABORTED stops them
+            redis_key = str(video.key)
             await self.video_repo.set_state(video.key, VideoProgress.ABORTED)
             await self.video_repo.commit()
-            await self.redis_repo.publish_state(str(video.key), VideoProgress.ABORTED)
+            await self.redis_repo.abort(redis_key)
+            await self.redis_repo.publish_state(redis_key, VideoProgress.ABORTED)
 
             frame_uuids = await self.video_repo.find_frame_uuids_by_video_id(
                 video.key
